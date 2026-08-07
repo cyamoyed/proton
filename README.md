@@ -266,6 +266,8 @@ env:
 
 - Node.js 读取 `package.json` 中的脚本，并通过锁文件识别 npm、pnpm、Yarn 或 Bun。
 - Python 仅在对应入口、依赖或测试文件存在时推荐安装、运行和测试命令。
+- Maven 读取 `pom.xml` 和本地父 Reactor，区分 JAR、WAR、多模块、Spring Boot、Spring Cloud、Quarkus 和 Exec 应用；Spring Boot 与 Spring Cloud 会显示不同的项目类型和命令名称，并优先使用 `mvnw` 或 `mvnw.cmd`。
+- Maven 聚合器会递归发现声明 `spring-boot-maven-plugin` 的可运行模块，在根页面提供基于 `-pl` 的模块启动命令；默认激活的 Cloud Profile 会在普通 Boot 命令中自动停用。
 - 存在 Gradle Wrapper 时优先使用 `gradlew` 或 `gradlew.bat`。
 - C++ 根据实际构建文件选择 CMake 和/或 Meson 命令。
 

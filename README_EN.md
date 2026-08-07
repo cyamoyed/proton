@@ -266,6 +266,8 @@ Built-in plugins adapt their recommendations to the detected project:
 
 - Node.js reads `package.json` scripts and detects npm, pnpm, Yarn, or Bun from lock files.
 - Python recommends install, run, and test commands only when supporting files or directories exist.
+- Maven reads `pom.xml` and local parent reactors; distinguishes JAR, WAR, multi-module, Spring Boot, Spring Cloud, Quarkus, and Exec applications; shows different project types and command labels for Boot and Cloud; and prefers `mvnw` or `mvnw.cmd`.
+- Maven aggregators recursively discover runnable modules that declare `spring-boot-maven-plugin` and expose reactor-relative `-pl` run commands on the root page; default-active Cloud profiles are disabled for normal Boot commands.
 - Gradle prefers `gradlew` or `gradlew.bat` when a wrapper is available.
 - C++ selects CMake and/or Meson commands from the actual build files.
 

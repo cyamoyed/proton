@@ -93,7 +93,7 @@ func detectInDir(dir string, plugins []*plugin.Plugin) []*DetectedProject {
 			resolved := plugin.ResolveForDir(p, dir)
 			detected = append(detected, &DetectedProject{
 				Plugin:     resolved,
-				Types:      []string{p.Name},
+				Types:      []string{resolved.Name},
 				Confidence: score,
 				Dir:        dir,
 			})

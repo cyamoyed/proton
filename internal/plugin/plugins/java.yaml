@@ -3,7 +3,7 @@ version: 1.0
 detect:
   files: ["pom.xml"]
 commands:
-  - name: Build
+  - name: Package
     run: "mvn package"
   - name: Run tests
     run: "mvn test"

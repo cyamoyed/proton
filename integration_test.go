@@ -211,3 +211,52 @@ func TestIntegrationGradleProject(t *testing.T) {
 	}
 	t.Fatal("Gradle project not detected")
 }
+
+func TestIntegrationMavenProjectCommandMatrix(t *testing.T) {
+	plugins, err := plugin.LoadPlugins(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name        string
+		dir         string
+		wantCommand string
+	}{
+		{name: "jar", dir: filepath.Join("testdata", "maven", "simple-jar"), wantCommand: "Package JAR"},
+		{name: "war", dir: filepath.Join("testdata", "maven", "web-war"), wantCommand: "Package WAR"},
+		{name: "reactor", dir: filepath.Join("testdata", "maven", "multi-module"), wantCommand: "Build all modules"},
+		{name: "executable module", dir: filepath.Join("testdata", "maven", "multi-module", "application"), wantCommand: "Run application"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			projects := detector.DetectProjectWithDepth(test.dir, plugins, 0)
+			if len(projects) != 1 || projects[0].Plugin.Name != "java-maven" {
+				t.Fatalf("Maven project detection = %+v", projects)
+			}
+			for _, command := range projects[0].Plugin.Commands {
+				if command.Name == test.wantCommand {
+					return
+				}
+			}
+			t.Fatalf("commands %+v do not include %q", projects[0].Plugin.Commands, test.wantCommand)
+		})
+	}
+}
+
+func TestIntegrationMavenUsesResolvedFrameworkType(t *testing.T) {
+	dir := t.TempDir()
+	pom := `<project><parent><artifactId>platform</artifactId></parent><artifactId>orders</artifactId>` +
+		`<dependencies><dependency><groupId>org.springframework.cloud</groupId><artifactId>spring-cloud-starter-openfeign</artifactId></dependency></dependencies>` +
+		`<build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>`
+	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), []byte(pom), 0644); err != nil {
+		t.Fatal(err)
+	}
+	plugins, err := plugin.LoadPlugins(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projects := detector.DetectProjectWithDepth(dir, plugins, 0)
+	if len(projects) != 1 || len(projects[0].Types) != 1 || projects[0].Types[0] != "spring-cloud-maven" {
+		t.Fatalf("resolved project types = %+v", projects)
+	}
+}
