@@ -1,0 +1,18 @@
+name: java-gradle
+version: 1.0
+detect:
+  files: ["build.gradle", "build.gradle.kts"]
+commands:
+  - name: Build
+    run: "gradle build"
+  - name: Run
+    run: "gradle run"
+  - name: Run tests
+    run: "gradle test"
+env:
+  - name: java
+    check: "java -version"
+    required: true
+  - name: gradle
+    check: "gradle --version"
+    required: true

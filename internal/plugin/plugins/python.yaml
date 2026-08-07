@@ -1,0 +1,18 @@
+name: python
+version: 1.0
+detect:
+  files: ["requirements.txt", "pyproject.toml", "setup.py", "Pipfile"]
+commands:
+  - name: Install dependencies
+    run: "pip install -r requirements.txt"
+  - name: Run
+    run: "python main.py"
+  - name: Run tests
+    run: "pytest"
+env:
+  - name: python
+    check: "python --version"
+    required: true
+  - name: pip
+    check: "pip --version"
+    required: true

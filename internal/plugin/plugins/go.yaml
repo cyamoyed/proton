@@ -1,0 +1,19 @@
+name: go
+version: 1.0
+detect:
+  files: ["go.mod"]
+commands:
+  - name: Download dependencies
+    run: "go mod download"
+  - name: Run
+    run: "go run ."
+  - name: Build
+    run: "go build ."
+  - name: Run tests
+    run: "go test ./..."
+  - name: Vet
+    run: "go vet ./..."
+env:
+  - name: go
+    check: "go version"
+    required: true

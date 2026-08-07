@@ -1,0 +1,16 @@
+name: cpp
+version: 1.0
+detect:
+  files: ["CMakeLists.txt", "meson.build"]
+commands:
+  - name: Build (cmake)
+    run: "cmake -B build && cmake --build build"
+  - name: Build (make)
+    run: "make"
+env:
+  - name: cmake
+    check: "cmake --version"
+    required: false
+  - name: make
+    check: "make --version"
+    required: false

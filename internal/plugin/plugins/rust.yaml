@@ -1,0 +1,22 @@
+name: rust
+version: 1.0
+detect:
+  files: ["Cargo.toml"]
+commands:
+  - name: Build
+    run: "cargo build"
+  - name: Run
+    run: "cargo run"
+  - name: Run tests
+    run: "cargo test"
+  - name: Lint
+    run: "cargo clippy"
+  - name: Format
+    run: "cargo fmt"
+env:
+  - name: rust
+    check: "rustc --version"
+    required: true
+  - name: cargo
+    check: "cargo --version"
+    required: true

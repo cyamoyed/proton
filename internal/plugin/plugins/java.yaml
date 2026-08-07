@@ -1,0 +1,16 @@
+name: java-maven
+version: 1.0
+detect:
+  files: ["pom.xml"]
+commands:
+  - name: Build
+    run: "mvn package"
+  - name: Run tests
+    run: "mvn test"
+env:
+  - name: java
+    check: "java -version"
+    required: true
+  - name: maven
+    check: "mvn --version"
+    required: true

@@ -1,0 +1,22 @@
+name: nodejs
+version: 1.0
+detect:
+  files: ["package.json"]
+commands:
+  - name: Install dependencies
+    run: "npm install"
+  - name: Start dev server
+    run: "npm run dev"
+  - name: Build
+    run: "npm run build"
+  - name: Run tests
+    run: "npm test"
+  - name: Lint
+    run: "npm run lint"
+env:
+  - name: node
+    check: "node --version"
+    required: true
+  - name: npm
+    check: "npm --version"
+    required: true
