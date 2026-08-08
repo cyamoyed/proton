@@ -1,0 +1,7 @@
+interface:
+  display_name: "Proton Runner"
+  short_description: "Use Proton to run local project tasks."
+  default_prompt: "Use $proton-runner to discover and run the right task for this local project with the proton CLI."
+
+policy:
+  allow_implicit_invocation: true
