@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -11,30 +13,51 @@ type Config struct {
 	Plugins []string `yaml:"plugins"`
 }
 
-func LoadConfig() *Config {
-	cfg := &Config{
-		Plugins: []string{},
-	}
+// LoadConfig loads global configuration and configuration belonging to the
+// directory Proton was asked to scan. Relative plugin paths are resolved from
+// the configuration file that declares them.
+func LoadConfig(projectDir string) (*Config, error) {
+	cfg := &Config{Plugins: []string{}}
+	var loadErrors []error
 
 	// Load global config
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		globalConfigPath := filepath.Join(homeDir, ".proton", "config.yaml")
-		if data, err := os.ReadFile(globalConfigPath); err == nil {
-			var globalCfg Config
-			if err := yaml.Unmarshal(data, &globalCfg); err == nil {
-				cfg.Plugins = append(cfg.Plugins, globalCfg.Plugins...)
-			}
+		if err := appendConfig(cfg, globalConfigPath); err != nil {
+			loadErrors = append(loadErrors, err)
 		}
 	}
 
 	// Load project-level config
-	if data, err := os.ReadFile(".proton.yaml"); err == nil {
-		var projectCfg Config
-		if err := yaml.Unmarshal(data, &projectCfg); err == nil {
-			cfg.Plugins = append(cfg.Plugins, projectCfg.Plugins...)
-		}
+	if projectDir == "" {
+		projectDir, _ = os.Getwd()
+	}
+	if err := appendConfig(cfg, filepath.Join(projectDir, ".proton.yaml")); err != nil {
+		loadErrors = append(loadErrors, err)
 	}
 
-	return cfg
+	return cfg, errors.Join(loadErrors...)
+}
+
+func appendConfig(target *Config, configPath string) error {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("reading config %s: %w", configPath, err)
+	}
+	var loaded Config
+	if err := yaml.Unmarshal(data, &loaded); err != nil {
+		return fmt.Errorf("parsing config %s: %w", configPath, err)
+	}
+	baseDir := filepath.Dir(configPath)
+	for _, pluginPath := range loaded.Plugins {
+		if !filepath.IsAbs(pluginPath) {
+			pluginPath = filepath.Join(baseDir, pluginPath)
+		}
+		target.Plugins = append(target.Plugins, filepath.Clean(pluginPath))
+	}
+	return nil
 }

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/fupeijun/proton/internal/detector"
-	"github.com/fupeijun/proton/internal/plugin"
+	"github.com/cyamoyed/proton/internal/detector"
+	"github.com/cyamoyed/proton/internal/plugin"
 )
 
 func TestIntegrationPythonProject(t *testing.T) {
@@ -147,6 +147,56 @@ func TestIntegrationCppProject(t *testing.T) {
 	}
 }
 
+func TestIntegrationSwiftUIIOSProject(t *testing.T) {
+	tmpDir := t.TempDir()
+	project := filepath.Join(tmpDir, "Example.xcodeproj")
+	if err := os.Mkdir(project, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "project.pbxproj"), []byte("SDKROOT = iphoneos;\ncom.apple.product-type.application"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "ExampleApp.swift"), []byte("import SwiftUI\n@main struct ExampleApp: App {}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	plugins, err := plugin.LoadPlugins(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	detected := detector.DetectProjectWithDepth(tmpDir, plugins, 0)
+	if len(detected) != 1 || detected[0].Plugin.Name != "swiftui-ios" {
+		t.Fatalf("SwiftUI iOS project detection = %+v", detected)
+	}
+	if len(detected[0].Plugin.Commands) < 3 {
+		t.Fatalf("SwiftUI iOS commands = %+v", detected[0].Plugin.Commands)
+	}
+}
+
+func TestIntegrationUIKitProjectIsNotSwiftUI(t *testing.T) {
+	tmpDir := t.TempDir()
+	project := filepath.Join(tmpDir, "UIKitApp.xcodeproj")
+	if err := os.Mkdir(project, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "project.pbxproj"), []byte("IPHONEOS_DEPLOYMENT_TARGET = 18.0;"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "AppDelegate.swift"), []byte("import UIKit"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	plugins, err := plugin.LoadPlugins(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, detected := range detector.DetectProjectWithDepth(tmpDir, plugins, 0) {
+		if detected.Plugin.Name == "swiftui-ios" {
+			t.Fatal("UIKit-only project must not be detected as SwiftUI")
+		}
+	}
+}
+
 func TestIntegrationMixedProject(t *testing.T) {
 	tmpDir := t.TempDir()
 	os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{}`), 0644)
@@ -174,6 +224,38 @@ func TestIntegrationCommandsAvailable(t *testing.T) {
 		if len(p.Commands) == 0 {
 			t.Errorf("Plugin %q has no commands", p.Name)
 		}
+	}
+}
+
+func TestIntegrationDeclaredTaskFiles(t *testing.T) {
+	tests := []struct {
+		name       string
+		file       string
+		contents   string
+		pluginName string
+		command    string
+	}{
+		{name: "just", file: "justfile", contents: "check:\n\tgo test ./...\n", pluginName: "just", command: "check"},
+		{name: "taskfile", file: "Taskfile.yml", contents: "version: '3'\ntasks:\n  check:\n    cmds: [go test ./...]\n", pluginName: "taskfile", command: "check"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, test.file), []byte(test.contents), 0644); err != nil {
+				t.Fatal(err)
+			}
+			plugins, err := plugin.LoadPlugins(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			detected := detector.DetectProjectWithDepth(dir, plugins, 0)
+			if len(detected) != 1 || detected[0].Plugin.Name != test.pluginName {
+				t.Fatalf("detected = %+v", detected)
+			}
+			if len(detected[0].Plugin.Commands) != 1 || detected[0].Plugin.Commands[0].Name != test.command {
+				t.Fatalf("commands = %+v", detected[0].Plugin.Commands)
+			}
+		})
 	}
 }
 

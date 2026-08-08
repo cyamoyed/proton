@@ -2,7 +2,9 @@ package plugin
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -39,6 +41,171 @@ func TestResolveCppMatchesBuildSystem(t *testing.T) {
 	if len(resolved.Commands) != 1 || !strings.Contains(resolved.Commands[0].Run, "meson") {
 		t.Fatalf("commands = %+v, want Meson only", resolved.Commands)
 	}
+}
+
+func TestResolveJustUsesDeclaredRecipes(t *testing.T) {
+	dir := t.TempDir()
+	contents := `set shell := ["bash", "-cu"]
+
+# Compile the application
+build target="all":
+	go build ./...
+
+[private]
+helper:
+	echo hidden
+
+test: build
+	go test ./...
+`
+	if err := os.WriteFile(filepath.Join(dir, "justfile"), []byte(contents), 0644); err != nil {
+		t.Fatal(err)
+	}
+	resolved := ResolveForDir(&Plugin{Name: "just", Commands: []Command{{Name: "List", Run: "just --list"}}}, dir)
+	if len(resolved.Commands) != 2 {
+		t.Fatalf("commands = %+v, want build and test", resolved.Commands)
+	}
+	if resolved.Commands[0].Name != "build" || resolved.Commands[0].Description != "Compile the application" || resolved.Commands[0].Source != "justfile" {
+		t.Fatalf("build command = %+v", resolved.Commands[0])
+	}
+	if resolved.Commands[1].Name != "test" || resolved.Commands[1].Run != "just 'test'" {
+		t.Fatalf("test command = %+v", resolved.Commands[1])
+	}
+}
+
+func TestResolveTaskfileUsesSortedPublicTasks(t *testing.T) {
+	dir := t.TempDir()
+	contents := `version: '3'
+tasks:
+  test:
+    desc: Run the tests
+    cmds: [go test ./...]
+  internal-helper:
+    internal: true
+    cmds: [echo hidden]
+  build:
+    cmds: [go build ./...]
+`
+	if err := os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte(contents), 0644); err != nil {
+		t.Fatal(err)
+	}
+	resolved := ResolveForDir(&Plugin{Name: "taskfile", Commands: []Command{{Name: "List", Run: "task --list"}}}, dir)
+	if len(resolved.Commands) != 2 {
+		t.Fatalf("commands = %+v, want two public tasks", resolved.Commands)
+	}
+	if resolved.Commands[0].Name != "build" || resolved.Commands[1].Name != "test" {
+		t.Fatalf("commands are not sorted: %+v", resolved.Commands)
+	}
+	if resolved.Commands[1].Description != "Run the tests" || resolved.Commands[1].Source != "Taskfile.yml" {
+		t.Fatalf("test command = %+v", resolved.Commands[1])
+	}
+}
+
+func TestMatchesDirRequiresSwiftUIAndIOS(t *testing.T) {
+	plugin := &Plugin{Name: "swiftui-ios"}
+
+	iosSwiftUI := t.TempDir()
+	writeTestXcodeProject(t, iosSwiftUI, "Sample", "SDKROOT = iphoneos;")
+	if err := os.WriteFile(filepath.Join(iosSwiftUI, "SampleApp.swift"), []byte("import SwiftUI\n@main struct SampleApp: App {}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if !MatchesDir(plugin, iosSwiftUI) {
+		t.Fatal("SwiftUI iOS project was not matched")
+	}
+
+	uiKit := t.TempDir()
+	writeTestXcodeProject(t, uiKit, "UIKitApp", "IPHONEOS_DEPLOYMENT_TARGET = 18.0;")
+	if err := os.WriteFile(filepath.Join(uiKit, "AppDelegate.swift"), []byte("import UIKit"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if MatchesDir(plugin, uiKit) {
+		t.Fatal("UIKit-only project was matched as SwiftUI")
+	}
+
+	macOS := t.TempDir()
+	writeTestXcodeProject(t, macOS, "MacApp", "SDKROOT = macosx;")
+	if err := os.WriteFile(filepath.Join(macOS, "MacApp.swift"), []byte("import SwiftUI"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if MatchesDir(plugin, macOS) {
+		t.Fatal("macOS-only SwiftUI project was matched as iOS")
+	}
+}
+
+func TestResolveSwiftUIIOSUsesWorkspaceSchemeAndAvailableSimulator(t *testing.T) {
+	dir := t.TempDir()
+	project := writeTestXcodeProject(t, dir, "Sample App", "IPHONEOS_DEPLOYMENT_TARGET = 18.0;\ncom.apple.product-type.application\ncom.apple.product-type.bundle.unit-test")
+	if err := os.WriteFile(filepath.Join(dir, "SampleApp.swift"), []byte("import SwiftUI"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	schemeDir := filepath.Join(project, "xcshareddata", "xcschemes")
+	if err := os.MkdirAll(schemeDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(schemeDir, "Sample App.xcscheme"), []byte("<Scheme><LaunchAction><BuildableProductRunnable/></LaunchAction><TestAction><TestableReference/></TestAction></Scheme>"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "Sample App.xcworkspace"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	resolved := ResolveForDir(&Plugin{Name: "swiftui-ios", Commands: []Command{{Name: "placeholder"}}}, dir)
+	if !hasCommandRun(resolved.Commands, "open 'Sample App.xcworkspace'") {
+		t.Fatalf("commands = %+v, want workspace open command", resolved.Commands)
+	}
+	build := "xcodebuild -workspace 'Sample App.xcworkspace' -scheme 'Sample App' -configuration Debug -destination 'generic/platform=iOS Simulator' build"
+	if !hasCommandRun(resolved.Commands, build) {
+		t.Fatalf("commands = %+v, want %q", resolved.Commands, build)
+	}
+	run := commandRunByName(resolved.Commands, "Run in iOS Simulator")
+	for _, part := range []string{
+		`xcrun simctl boot "$simulator_id"`,
+		"open -a Simulator",
+		`xcrun simctl bootstatus "$simulator_id" -b`,
+		`build_settings="$(xcodebuild -workspace 'Sample App.xcworkspace'`,
+		`xcrun simctl install "$simulator_id" "$app_path"`,
+		`xcrun simctl launch "$simulator_id" "$bundle_id"`,
+	} {
+		if !strings.Contains(run, part) {
+			t.Errorf("run command = %q, want part %q", run, part)
+		}
+	}
+	if runtime.GOOS != "windows" {
+		if output, err := exec.Command("/bin/sh", "-n", "-c", run).CombinedOutput(); err != nil {
+			t.Fatalf("run command has invalid shell syntax: %v\n%s\n%s", err, output, run)
+		}
+	}
+	testRun := commandRunByName(resolved.Commands, "Run tests")
+	if !strings.Contains(testRun, "xcrun simctl list devices available") || !strings.Contains(testRun, `-destination "platform=iOS Simulator,id=$simulator_id" test`) {
+		t.Fatalf("test command = %q, want dynamic available simulator", testRun)
+	}
+}
+
+func TestResolveSwiftUIIOSOmitsTestsWithoutTestTarget(t *testing.T) {
+	dir := t.TempDir()
+	writeTestXcodeProject(t, dir, "Demo", "SUPPORTED_PLATFORMS = \"iphoneos iphonesimulator\";\ncom.apple.product-type.application")
+	resolved := ResolveForDir(&Plugin{Name: "swiftui-ios", Commands: []Command{{Name: "placeholder"}}}, dir)
+	if hasCommandName(resolved.Commands, "Run tests") {
+		t.Fatalf("commands = %+v, test command should require a test target", resolved.Commands)
+	}
+	if !hasCommandRun(resolved.Commands, "xcodebuild -project 'Demo.xcodeproj' -scheme 'Demo' -configuration Debug -destination 'generic/platform=iOS Simulator' build") {
+		t.Fatalf("commands = %+v, want project build command", resolved.Commands)
+	}
+	if !hasCommandName(resolved.Commands, "Run in iOS Simulator") {
+		t.Fatalf("commands = %+v, want simulator run command for app target", resolved.Commands)
+	}
+}
+
+func writeTestXcodeProject(t *testing.T, dir, name, pbxproj string) string {
+	t.Helper()
+	project := filepath.Join(dir, name+".xcodeproj")
+	if err := os.MkdirAll(project, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "project.pbxproj"), []byte(pbxproj), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return project
 }
 
 func TestResolveMavenProjectTypes(t *testing.T) {
@@ -341,4 +508,13 @@ func hasCommandName(commands []Command, name string) bool {
 		}
 	}
 	return false
+}
+
+func commandRunByName(commands []Command, name string) string {
+	for _, command := range commands {
+		if command.Name == name {
+			return command.Run
+		}
+	}
+	return ""
 }

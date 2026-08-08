@@ -19,9 +19,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
+          check-latest: true
 
       - name: Build all platforms
-        run: make build-all
+        run: make build-all checksums
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -40,3 +41,4 @@ jobs:
             build/proton-installer-darwin-arm64
             build/proton-installer-windows-amd64.exe
             build/proton-installer-windows-arm64.exe
+            build/checksums.txt

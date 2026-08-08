@@ -3,7 +3,7 @@ package envcheck
 import (
 	"testing"
 
-	"github.com/fupeijun/proton/internal/plugin"
+	"github.com/cyamoyed/proton/internal/plugin"
 )
 
 func TestCheckEnvironment(t *testing.T) {

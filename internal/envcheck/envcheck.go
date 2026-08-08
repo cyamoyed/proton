@@ -5,9 +5,10 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/fupeijun/proton/internal/plugin"
+	"github.com/cyamoyed/proton/internal/plugin"
 )
 
 type EnvStatus struct {
@@ -18,46 +19,51 @@ type EnvStatus struct {
 }
 
 func CheckEnvironment(checks []plugin.EnvCheck) []EnvStatus {
-	var statuses []EnvStatus
+	statuses := make([]EnvStatus, len(checks))
+	var wait sync.WaitGroup
+	wait.Add(len(checks))
+	for index, check := range checks {
+		go func() {
+			defer wait.Done()
+			statuses[index] = checkEnvironment(check)
+		}()
+	}
+	wait.Wait()
+	return statuses
+}
 
-	for _, check := range checks {
-		status := EnvStatus{
-			Name:     check.Name,
-			Required: check.Required,
-		}
-
-		// Try to run the check command
-		parts := strings.Fields(check.Check)
-		if len(parts) == 0 {
-			statuses = append(statuses, status)
-			continue
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-		var cmd *exec.Cmd
-		if runtime.GOOS == "windows" {
-			// On Windows, use cmd.exe /c to run commands
-			cmd = exec.CommandContext(ctx, "cmd.exe", "/c", check.Check)
-		} else {
-			cmd = exec.CommandContext(ctx, parts[0], parts[1:]...)
-		}
-
-		output, err := cmd.CombinedOutput()
-		cancel()
-		if err != nil {
-			status.OK = false
-			statuses = append(statuses, status)
-			continue
-		}
-
-		// Extract version from output
-		status.Version = extractVersion(string(output))
-		status.OK = true
-		statuses = append(statuses, status)
+func checkEnvironment(check plugin.EnvCheck) EnvStatus {
+	status := EnvStatus{
+		Name:     check.Name,
+		Required: check.Required,
 	}
 
-	return statuses
+	// Try to run the check command
+	parts := strings.Fields(check.Check)
+	if len(parts) == 0 {
+		return status
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		// On Windows, use cmd.exe /c to run commands
+		cmd = exec.CommandContext(ctx, "cmd.exe", "/c", check.Check)
+	} else {
+		cmd = exec.CommandContext(ctx, parts[0], parts[1:]...)
+	}
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return status
+	}
+
+	// Extract version from output
+	status.Version = extractVersion(string(output))
+	status.OK = true
+	return status
 }
 
 func extractVersion(output string) string {

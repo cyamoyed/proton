@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/fupeijun/proton/internal/detector"
-	"github.com/fupeijun/proton/internal/envcheck"
-	"github.com/fupeijun/proton/internal/plugin"
+	"github.com/cyamoyed/proton/internal/detector"
+	"github.com/cyamoyed/proton/internal/envcheck"
+	"github.com/cyamoyed/proton/internal/plugin"
 )
 
 type panel int
@@ -142,7 +142,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.notice = "Wait for the environment check to finish"
 					return m, nil
 				}
-				if missing := missingRequired(m.envStatus); len(missing) > 0 {
+				if missing := missingRequiredForCommand(m.envStatus, selected.Checks); len(missing) > 0 {
 					m.notice = "Cannot execute: missing required tools: " + fmt.Sprintf("%v", missing)
 					return m, nil
 				}
@@ -245,8 +245,18 @@ func (m Model) View() string {
 		}
 		cmdView += fmt.Sprintf("%s %s%s  %s\n", prefix, cmd.Name, risk, helpStyle.Render(cmd.Run))
 	}
-	if m.panel == commandsPanel && m.cursor < len(m.commands) && m.commands[m.cursor].Description != "" {
-		cmdView += "\n" + helpStyle.Render(m.commands[m.cursor].Description) + "\n"
+	if m.panel == commandsPanel && m.cursor < len(m.commands) {
+		selected := m.commands[m.cursor]
+		var details []string
+		if selected.Description != "" {
+			details = append(details, selected.Description)
+		}
+		if selected.Source != "" {
+			details = append(details, "Source: "+selected.Source)
+		}
+		if len(details) > 0 {
+			cmdView += "\n" + helpStyle.Render(strings.Join(details, "\n")) + "\n"
+		}
 	}
 
 	// Help
@@ -266,6 +276,30 @@ func missingRequired(statuses []envcheck.EnvStatus) []string {
 	for _, status := range statuses {
 		if status.Required && !status.OK {
 			missing = append(missing, status.Name)
+		}
+	}
+	return missing
+}
+
+func missingRequiredForCommand(statuses []envcheck.EnvStatus, checks []plugin.EnvCheck) []string {
+	if checks == nil {
+		return missingRequired(statuses)
+	}
+	required := make(map[string]bool)
+	for _, check := range checks {
+		if check.Required {
+			required[check.Name] = true
+		}
+	}
+	available := make(map[string]bool, len(statuses))
+	for _, status := range statuses {
+		available[status.Name] = status.OK
+	}
+	var missing []string
+	for _, check := range checks {
+		if required[check.Name] && !available[check.Name] {
+			missing = append(missing, check.Name)
+			delete(required, check.Name)
 		}
 	}
 	return missing

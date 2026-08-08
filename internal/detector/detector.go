@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/fupeijun/proton/internal/plugin"
+	"github.com/cyamoyed/proton/internal/plugin"
 )
 
 type DetectedProject struct {
@@ -48,7 +48,7 @@ func DetectProjectWithDepth(dir string, plugins []*plugin.Plugin, depthLimit int
 			}
 			// Skip hidden directories and common non-project dirs
 			name := entry.Name()
-			if len(name) == 0 || name[0] == '.' || name == "node_modules" || name == "vendor" || name == "target" {
+			if shouldSkipDirectory(name) {
 				continue
 			}
 
@@ -76,21 +76,32 @@ func detectInDir(dir string, plugins []*plugin.Plugin) []*DetectedProject {
 
 	for _, p := range plugins {
 		score := 0
+		var matchedFiles []os.FileInfo
+		var matchedDirs []os.FileInfo
 
 		for _, f := range p.Detect.Files {
-			if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
-				score += 10
+			for _, match := range detectionMatches(dir, f, false) {
+				if appendUniqueFileInfo(&matchedFiles, match) {
+					score += 10
+				}
 			}
 		}
 
 		for _, d := range p.Detect.Dirs {
-			if info, err := os.Stat(filepath.Join(dir, d)); err == nil && info.IsDir() {
-				score += 5
+			for _, match := range detectionMatches(dir, d, true) {
+				if appendUniqueFileInfo(&matchedDirs, match) {
+					score += 5
+				}
 			}
 		}
 
-		if score > 0 {
+		if score > 0 && plugin.MatchesDir(p, dir) {
 			resolved := plugin.ResolveForDir(p, dir)
+			for i := range resolved.Commands {
+				if resolved.Commands[i].Confidence == 0 {
+					resolved.Commands[i].Confidence = score
+				}
+			}
 			detected = append(detected, &DetectedProject{
 				Plugin:     resolved,
 				Types:      []string{resolved.Name},
@@ -101,6 +112,46 @@ func detectInDir(dir string, plugins []*plugin.Plugin) []*DetectedProject {
 	}
 
 	return detected
+}
+
+func shouldSkipDirectory(name string) bool {
+	if len(name) == 0 || name[0] == '.' {
+		return true
+	}
+	switch name {
+	case "node_modules", "vendor", "target", "Pods", "Carthage", "DerivedData", ".build":
+		return true
+	}
+	return strings.HasSuffix(name, ".xcodeproj") || strings.HasSuffix(name, ".xcworkspace")
+}
+
+func detectionMatches(dir, pattern string, wantDirectory bool) []os.FileInfo {
+	paths := []string{filepath.Join(dir, pattern)}
+	if strings.ContainsAny(pattern, "*?[") {
+		matches, err := filepath.Glob(filepath.Join(dir, pattern))
+		if err != nil {
+			return nil
+		}
+		paths = matches
+	}
+	var matches []os.FileInfo
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err == nil && info.IsDir() == wantDirectory {
+			matches = append(matches, info)
+		}
+	}
+	return matches
+}
+
+func appendUniqueFileInfo(current *[]os.FileInfo, candidate os.FileInfo) bool {
+	for _, existing := range *current {
+		if os.SameFile(existing, candidate) {
+			return false
+		}
+	}
+	*current = append(*current, candidate)
+	return true
 }
 
 func groupByDirectory(detected []*DetectedProject) []*DetectedProject {

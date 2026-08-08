@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/fupeijun/proton/internal/config"
+	"github.com/cyamoyed/proton/internal/config"
 )
 
 func TestLoadPlugins(t *testing.T) {
@@ -40,7 +40,7 @@ func TestLoadPluginsCount(t *testing.T) {
 		t.Fatalf("LoadPlugins() error = %v", err)
 	}
 
-	expectedCount := 7
+	expectedCount := 10
 	if len(plugins) != expectedCount {
 		t.Errorf("LoadPlugins() returned %d plugins, want %d", len(plugins), expectedCount)
 	}

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/fupeijun/proton/internal/plugin"
+	"github.com/cyamoyed/proton/internal/plugin"
 )
 
 func TestDetectProject(t *testing.T) {
@@ -72,5 +72,36 @@ func TestDetectProjectWithDepth(t *testing.T) {
 	}
 	if got := DetectProjectWithDepth(root, plugins, 1); len(got) != 1 {
 		t.Fatalf("depth one detected %d projects, want 1", len(got))
+	}
+}
+
+func TestDetectProjectMatchesWildcardDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "Example.xcodeproj"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	plugins := []*plugin.Plugin{{
+		Name:   "xcode",
+		Detect: plugin.Detect{Dirs: []string{"*.xcodeproj"}},
+	}}
+
+	detected := DetectProjectWithDepth(root, plugins, 0)
+	if len(detected) != 1 || detected[0].Plugin.Name != "xcode" {
+		t.Fatalf("wildcard directory detection = %+v, want xcode project", detected)
+	}
+}
+
+func TestDetectProjectDoesNotDoubleCountCaseVariants(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "project.yml"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	plugins := []*plugin.Plugin{{
+		Name:   "task-source",
+		Detect: plugin.Detect{Files: []string{"project.yml", "Project.yml"}},
+	}}
+	detected := DetectProjectWithDepth(root, plugins, 0)
+	if len(detected) != 1 || detected[0].Confidence != 10 {
+		t.Fatalf("detected = %+v, want one physical match worth 10", detected)
 	}
 }

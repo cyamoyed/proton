@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/fupeijun/proton/internal/config"
+	"github.com/cyamoyed/proton/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -102,5 +102,6 @@ func decodePlugin(path string, data []byte) (*Plugin, error) {
 	if len(p.Commands) == 0 {
 		return nil, fmt.Errorf("validating plugin %s: at least one command is required", path)
 	}
+	p.Source = path
 	return &p, nil
 }

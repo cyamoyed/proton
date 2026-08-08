@@ -6,6 +6,7 @@ type Plugin struct {
 	Detect   Detect     `yaml:"detect"`
 	Commands []Command  `yaml:"commands"`
 	Env      []EnvCheck `yaml:"env"`
+	Source   string     `yaml:"-"`
 }
 
 type Detect struct {
@@ -14,11 +15,14 @@ type Detect struct {
 }
 
 type Command struct {
-	Name        string `yaml:"name"`
-	Run         string `yaml:"run"`
-	Description string `yaml:"description,omitempty"`
-	Risk        string `yaml:"risk,omitempty"`
-	Confirm     bool   `yaml:"confirm,omitempty"`
+	Name        string     `yaml:"name"`
+	Run         string     `yaml:"run"`
+	Description string     `yaml:"description,omitempty"`
+	Risk        string     `yaml:"risk,omitempty"`
+	Confirm     bool       `yaml:"confirm,omitempty"`
+	Source      string     `yaml:"-"`
+	Checks      []EnvCheck `yaml:"-"`
+	Confidence  int        `yaml:"-"`
 }
 
 type EnvCheck struct {

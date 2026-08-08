@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fupeijun/proton/internal/detector"
-	"github.com/fupeijun/proton/internal/envcheck"
-	"github.com/fupeijun/proton/internal/plugin"
+	"github.com/cyamoyed/proton/internal/detector"
+	"github.com/cyamoyed/proton/internal/envcheck"
+	"github.com/cyamoyed/proton/internal/plugin"
 )
 
 func TestModelIgnoresStaleEnvironmentResult(t *testing.T) {
@@ -71,6 +71,29 @@ func TestModelBlocksCommandWhenRequiredEnvironmentMissing(t *testing.T) {
 	m = updated.(Model)
 	if cmd != nil || m.executeOnExit || m.notice == "" {
 		t.Fatalf("missing required tool did not block execution: %+v", m)
+	}
+}
+
+func TestModelUsesCommandSpecificEnvironmentRequirements(t *testing.T) {
+	m := NewModel([]*detector.DetectedProject{{
+		Plugin: &plugin.Plugin{
+			Commands: []plugin.Command{{
+				Name:   "build",
+				Run:    "just build",
+				Checks: []plugin.EnvCheck{{Name: "just", Required: true}},
+			}},
+		},
+		Dir: t.TempDir(),
+	}})
+	m.envChecking = false
+	m.envStatus = []envcheck.EnvStatus{
+		{Name: "just", Required: true, OK: true},
+		{Name: "task", Required: true, OK: false},
+	}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if !m.executeOnExit || m.executeCmd != "just build" {
+		t.Fatalf("unrelated missing tool blocked command: %+v", m)
 	}
 }
 

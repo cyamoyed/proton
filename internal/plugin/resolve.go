@@ -1,13 +1,18 @@
 package plugin
 
 import (
+	"bufio"
 	"encoding/json"
 	"encoding/xml"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ResolveForDir returns a project-specific copy of a plugin. Built-in generic
@@ -16,6 +21,7 @@ func ResolveForDir(source *Plugin, dir string) *Plugin {
 	resolved := *source
 	resolved.Commands = append([]Command(nil), source.Commands...)
 	resolved.Env = append([]EnvCheck(nil), source.Env...)
+	resolved.Commands = setCommandSource(resolved.Commands, source.Source)
 
 	switch source.Name {
 	case "nodejs":
@@ -28,8 +34,28 @@ func ResolveForDir(source *Plugin, dir string) *Plugin {
 		resolveMaven(&resolved, dir, runtime.GOOS)
 	case "cpp":
 		resolveCpp(&resolved, dir)
+	case "just":
+		resolveJust(&resolved, dir)
+	case "taskfile":
+		resolveTaskfile(&resolved, dir)
+	case "swiftui-ios":
+		resolveSwiftUIIOS(&resolved, dir)
+	}
+	for i := range resolved.Commands {
+		if resolved.Commands[i].Checks == nil {
+			resolved.Commands[i].Checks = append([]EnvCheck(nil), resolved.Env...)
+		}
 	}
 	return &resolved
+}
+
+// MatchesDir applies project checks that cannot be expressed by filename
+// detection alone. Most plugins only need their declarative detection rules.
+func MatchesDir(source *Plugin, dir string) bool {
+	if source.Name == "swiftui-ios" {
+		return isSwiftUIIOSProject(dir)
+	}
+	return true
 }
 
 type mavenProject struct {
@@ -145,7 +171,7 @@ func resolveMaven(p *Plugin, dir, goos string) {
 		}
 	}
 	commands = append(commands, Command{Name: "Dependency tree", Run: prefix + " dependency:tree", Description: "Show resolved Maven dependencies"})
-	p.Commands = commands
+	p.Commands = setCommandSource(commands, "pom.xml")
 }
 
 type runnableMavenModule struct {
@@ -458,12 +484,17 @@ func resolveNode(p *Plugin, dir string) {
 			seen[item.script] = true
 		}
 	}
+	remaining := make([]string, 0, len(manifest.Scripts))
 	for script := range manifest.Scripts {
 		if !seen[script] {
-			commands = append(commands, Command{Name: script, Run: manager + " run " + script, Description: "package.json script: " + script})
+			remaining = append(remaining, script)
 		}
 	}
-	p.Commands = commands
+	sort.Strings(remaining)
+	for _, script := range remaining {
+		commands = append(commands, Command{Name: script, Run: manager + " run " + script, Description: "package.json script: " + script})
+	}
+	p.Commands = setCommandSource(commands, "package.json")
 	for i := range p.Env {
 		if p.Env[i].Name == "npm" {
 			p.Env[i].Name = manager
@@ -488,7 +519,7 @@ func resolvePython(p *Plugin, dir string) {
 		commands = append(commands, Command{Name: "Run tests", Run: "python -m pytest"})
 	}
 	if len(commands) > 0 {
-		p.Commands = commands
+		p.Commands = setCommandSource(commands, "Python project files")
 	}
 }
 
@@ -512,19 +543,392 @@ func resolveGradle(p *Plugin, dir string) {
 			}
 		}
 	}
+	source := "build.gradle"
+	if exists(dir, "build.gradle.kts") {
+		source = "build.gradle.kts"
+	}
+	p.Commands = setCommandSource(p.Commands, source)
 }
 
 func resolveCpp(p *Plugin, dir string) {
 	commands := []Command{}
 	if exists(dir, "CMakeLists.txt") {
-		commands = append(commands, Command{Name: "Build (CMake)", Run: "cmake -S . -B build && cmake --build build"})
+		commands = append(commands, Command{Name: "Build (CMake)", Run: "cmake -S . -B build && cmake --build build", Source: "CMakeLists.txt"})
 	}
 	if exists(dir, "meson.build") {
-		commands = append(commands, Command{Name: "Build (Meson)", Run: "meson setup build && meson compile -C build"})
+		commands = append(commands, Command{Name: "Build (Meson)", Run: "meson setup build && meson compile -C build", Source: "meson.build"})
 	}
 	if len(commands) > 0 {
 		p.Commands = commands
 	}
+}
+
+var justRecipePattern = regexp.MustCompile(`^([[:alnum:]_-]+)(?:[ \t]+[^:]*)?[ \t]*:(?:[^=].*)?$`)
+
+func resolveJust(p *Plugin, dir string) {
+	name := firstExisting(dir, "justfile", "Justfile", ".justfile")
+	if name == "" {
+		return
+	}
+	file, err := os.Open(filepath.Join(dir, name))
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	var commands []Command
+	description := ""
+	private := false
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") && !strings.HasPrefix(trimmed, "#!") {
+			description = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+			continue
+		}
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			private = strings.Contains(trimmed, "private")
+			continue
+		}
+		if len(line) != len(strings.TrimLeft(line, " \t")) {
+			description = ""
+			continue
+		}
+		match := justRecipePattern.FindStringSubmatch(line)
+		if len(match) != 2 {
+			description = ""
+			private = false
+			continue
+		}
+		recipe := match[1]
+		if !private {
+			commands = append(commands, Command{
+				Name:        recipe,
+				Run:         "just " + shellQuote(recipe),
+				Description: description,
+				Source:      name,
+			})
+		}
+		description = ""
+		private = false
+	}
+	if len(commands) > 0 {
+		p.Commands = commands
+	}
+}
+
+func resolveTaskfile(p *Plugin, dir string) {
+	name := firstExisting(dir, "Taskfile.yml", "Taskfile.yaml", "taskfile.yml", "taskfile.yaml")
+	if name == "" {
+		return
+	}
+	data, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		return
+	}
+	var manifest struct {
+		Tasks map[string]yaml.Node `yaml:"tasks"`
+	}
+	if yaml.Unmarshal(data, &manifest) != nil {
+		return
+	}
+	names := make([]string, 0, len(manifest.Tasks))
+	for taskName := range manifest.Tasks {
+		names = append(names, taskName)
+	}
+	sort.Strings(names)
+	commands := make([]Command, 0, len(names))
+	for _, taskName := range names {
+		var metadata struct {
+			Description string `yaml:"desc"`
+			Internal    bool   `yaml:"internal"`
+		}
+		node := manifest.Tasks[taskName]
+		_ = node.Decode(&metadata)
+		if metadata.Internal {
+			continue
+		}
+		commands = append(commands, Command{
+			Name:        taskName,
+			Run:         "task " + shellQuote(taskName),
+			Description: metadata.Description,
+			Source:      name,
+		})
+	}
+	if len(commands) > 0 {
+		p.Commands = commands
+	}
+}
+
+func firstExisting(dir string, names ...string) string {
+	for _, name := range names {
+		if exists(dir, name) {
+			return name
+		}
+	}
+	return ""
+}
+
+type xcodeScheme struct {
+	name     string
+	hasTests bool
+	runnable bool
+}
+
+var (
+	iosPlatformsPattern  = regexp.MustCompile(`(?m)SUPPORTED_PLATFORMS\s*=\s*"?[^;\n]*\biphoneos\b`)
+	swiftUIImportPattern = regexp.MustCompile(`(?m)^\s*(?:@[_[:alnum:]]+\s+)?import\s+SwiftUI\b`)
+)
+
+func resolveSwiftUIIOS(p *Plugin, dir string) {
+	projects := xcodeProjects(dir)
+	if len(projects) == 0 {
+		return
+	}
+	project := projects[0]
+	for _, candidate := range projects {
+		if isIOSXcodeProject(candidate) {
+			project = candidate
+			break
+		}
+	}
+
+	containerFlag, containerPath := "-project", filepath.Base(project)
+	if workspace := preferredXcodeWorkspace(dir, project); workspace != "" {
+		containerFlag, containerPath = "-workspace", filepath.Base(workspace)
+	}
+	container := containerFlag + " " + shellQuote(containerPath)
+	openPath := shellQuote(containerPath)
+
+	schemes := xcodeSchemes(project, filepath.Join(dir, containerPath))
+	if len(schemes) == 0 {
+		schemes = []xcodeScheme{{
+			name:     strings.TrimSuffix(filepath.Base(project), ".xcodeproj"),
+			hasTests: xcodeProjectHasTests(project),
+			runnable: xcodeProjectHasApp(project),
+		}}
+	}
+
+	commands := []Command{
+		{Name: "Open in Xcode", Run: "open " + openPath, Description: "Open the detected project in Xcode"},
+		{Name: "List schemes", Run: "xcodebuild " + container + " -list", Description: "Show the schemes and targets available to xcodebuild"},
+	}
+	for _, scheme := range schemes {
+		labelSuffix := ""
+		if len(schemes) > 1 {
+			labelSuffix = " (" + scheme.name + ")"
+		}
+		base := "xcodebuild " + container + " -scheme " + shellQuote(scheme.name)
+		commands = append(commands, Command{
+			Name:        "Build for iOS Simulator" + labelSuffix,
+			Run:         base + " -configuration Debug -destination " + shellQuote("generic/platform=iOS Simulator") + " build",
+			Description: "Compile the SwiftUI app without launching the iOS Simulator",
+		})
+		if scheme.runnable {
+			commands = append(commands, Command{
+				Name:        "Run in iOS Simulator" + labelSuffix,
+				Run:         simulatorRunCommand(base),
+				Description: "Boot an available iOS Simulator, build and install the app, then launch it",
+			})
+		}
+		if scheme.hasTests {
+			commands = append(commands, Command{
+				Name:        "Run tests" + labelSuffix,
+				Run:         simulatorSelectionCommand() + " && " + base + ` -destination "platform=iOS Simulator,id=$simulator_id" test`,
+				Description: "Run the scheme's tests on the first available iOS Simulator",
+			})
+		}
+	}
+	p.Commands = setCommandSource(commands, filepath.Base(project))
+}
+
+func setCommandSource(commands []Command, source string) []Command {
+	for i := range commands {
+		if commands[i].Source == "" {
+			commands[i].Source = source
+		}
+	}
+	return commands
+}
+
+func isSwiftUIIOSProject(dir string) bool {
+	projects := xcodeProjects(dir)
+	if len(projects) == 0 {
+		return false
+	}
+	hasIOSProject := false
+	for _, project := range projects {
+		if isIOSXcodeProject(project) {
+			hasIOSProject = true
+			break
+		}
+	}
+	return hasIOSProject && directoryImportsSwiftUI(dir)
+}
+
+func xcodeProjects(dir string) []string {
+	matches, _ := filepath.Glob(filepath.Join(dir, "*.xcodeproj"))
+	projects := matches[:0]
+	for _, match := range matches {
+		if info, err := os.Stat(match); err == nil && info.IsDir() {
+			projects = append(projects, match)
+		}
+	}
+	sort.Strings(projects)
+	return projects
+}
+
+func isIOSXcodeProject(project string) bool {
+	data, err := os.ReadFile(filepath.Join(project, "project.pbxproj"))
+	if err != nil {
+		return false
+	}
+	contents := string(data)
+	return strings.Contains(contents, "SDKROOT = iphoneos") ||
+		strings.Contains(contents, "IPHONEOS_DEPLOYMENT_TARGET") ||
+		iosPlatformsPattern.MatchString(contents)
+}
+
+func directoryImportsSwiftUI(dir string) bool {
+	found := false
+	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if entry.IsDir() && path != dir {
+			name := entry.Name()
+			if shouldSkipSwiftScanDirectory(name) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".swift" {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil || info.Size() > 2*1024*1024 {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err == nil && swiftUIImportPattern.Match(data) {
+			found = true
+			return fs.SkipAll
+		}
+		return nil
+	})
+	return found
+}
+
+func shouldSkipSwiftScanDirectory(name string) bool {
+	if strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".xcodeproj") || strings.HasSuffix(name, ".xcworkspace") {
+		return true
+	}
+	switch name {
+	case "Pods", "Carthage", "DerivedData", "node_modules", "vendor", "build":
+		return true
+	}
+	return false
+}
+
+func preferredXcodeWorkspace(dir, project string) string {
+	workspaces, _ := filepath.Glob(filepath.Join(dir, "*.xcworkspace"))
+	sort.Strings(workspaces)
+	projectName := strings.TrimSuffix(filepath.Base(project), ".xcodeproj")
+	for _, workspace := range workspaces {
+		if strings.TrimSuffix(filepath.Base(workspace), ".xcworkspace") == projectName {
+			return workspace
+		}
+	}
+	for _, workspace := range workspaces {
+		data, err := os.ReadFile(filepath.Join(workspace, "contents.xcworkspacedata"))
+		if err == nil && strings.Contains(string(data), filepath.Base(project)) {
+			return workspace
+		}
+	}
+	return ""
+}
+
+func xcodeSchemes(project, container string) []xcodeScheme {
+	patterns := []string{
+		filepath.Join(project, "xcshareddata", "xcschemes", "*.xcscheme"),
+		filepath.Join(project, "xcuserdata", "*", "xcschemes", "*.xcscheme"),
+	}
+	if strings.HasSuffix(container, ".xcworkspace") {
+		patterns = append(patterns,
+			filepath.Join(container, "xcshareddata", "xcschemes", "*.xcscheme"),
+			filepath.Join(container, "xcuserdata", "*", "xcschemes", "*.xcscheme"),
+		)
+	}
+	byName := make(map[string]xcodeScheme)
+	for _, pattern := range patterns {
+		matches, _ := filepath.Glob(pattern)
+		for _, match := range matches {
+			name := strings.TrimSuffix(filepath.Base(match), ".xcscheme")
+			data, _ := os.ReadFile(match)
+			contents := string(data)
+			scheme := byName[name]
+			scheme.name = name
+			scheme.hasTests = scheme.hasTests || strings.Contains(contents, "<TestableReference")
+			scheme.runnable = scheme.runnable || strings.Contains(contents, "<BuildableProductRunnable") || strings.Contains(contents, ".app&quot;")
+			byName[name] = scheme
+		}
+	}
+	names := make([]string, 0, len(byName))
+	for name := range byName {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	schemes := make([]xcodeScheme, 0, len(names))
+	for _, name := range names {
+		schemes = append(schemes, byName[name])
+	}
+	return schemes
+}
+
+func xcodeProjectHasTests(project string) bool {
+	data, err := os.ReadFile(filepath.Join(project, "project.pbxproj"))
+	if err != nil {
+		return false
+	}
+	contents := string(data)
+	return strings.Contains(contents, "com.apple.product-type.bundle.unit-test") ||
+		strings.Contains(contents, "com.apple.product-type.bundle.ui-testing")
+}
+
+func xcodeProjectHasApp(project string) bool {
+	data, err := os.ReadFile(filepath.Join(project, "project.pbxproj"))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), "com.apple.product-type.application")
+}
+
+func simulatorRunCommand(base string) string {
+	destination := ` -configuration Debug -destination "platform=iOS Simulator,id=$simulator_id"`
+	buildSettings := base + destination + " -showBuildSettings"
+	return simulatorSelectionCommand() +
+		` && (xcrun simctl boot "$simulator_id" >/dev/null 2>&1 || true)` +
+		` && open -a Simulator` +
+		` && xcrun simctl bootstatus "$simulator_id" -b` +
+		" && " + base + destination + " build" +
+		` && build_settings="$(` + buildSettings + `)"` +
+		` && app_path="$(printf '%s\n' "$build_settings" | awk -F ' = ' '/ TARGET_BUILD_DIR = / { build_dir=$2 } / WRAPPER_NAME = .*\.app$/ { print build_dir "/" $2; exit }')"` +
+		` && bundle_id="$(printf '%s\n' "$build_settings" | awk -F ' = ' '/ PRODUCT_BUNDLE_IDENTIFIER = / { bundle_id=$2 } / WRAPPER_NAME = .*\.app$/ { print bundle_id; exit }')"` +
+		` && test -d "$app_path" && test -n "$bundle_id"` +
+		` && xcrun simctl install "$simulator_id" "$app_path"` +
+		` && xcrun simctl launch "$simulator_id" "$bundle_id"`
+}
+
+func simulatorSelectionCommand() string {
+	return `simulator_id="$(xcrun simctl list devices available | awk -F '[()]' '/^-- iOS / { ios=1; next } /^-- / { ios=0 } ios && /\(Booted\)/ { print $2; found=1; exit } ios && /\(Shutdown\)/ && !fallback { fallback=$2 } END { if (!found && fallback) print fallback }')" && test -n "$simulator_id"`
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }
 
 func exists(dir, name string) bool {

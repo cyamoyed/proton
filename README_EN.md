@@ -4,9 +4,9 @@ English | [简体中文](README.md)
 [![Release](https://img.shields.io/github/v/release/cyamoyed/proton)](https://github.com/cyamoyed/proton/releases/latest)
 [![License](https://img.shields.io/github/license/cyamoyed/proton)](LICENSE)
 
-> A lightweight project launcher for AI-assisted development workflows.
+> Zero-configuration task discovery and execution for unfamiliar repositories and polyglot monorepos.
 
-Proton detects project types and runtime environments, then provides relevant commands through an interactive terminal interface. Start services, run tests, and build applications without keeping a heavyweight IDE open.
+Proton detects project types, existing tasks, and runtime environments, then exposes relevant commands through an interactive terminal or a machine-readable CLI. Developers can start services, test, and build quickly, while coding agents can consume the same local task catalog.
 
 ## Contents
 
@@ -18,6 +18,7 @@ Proton detects project types and runtime environments, then provides relevant co
 - [Usage](#usage)
 - [Supported project types](#supported-project-types)
 - [Configuration](#configuration)
+- [Roadmap](ROADMAP.md)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -34,6 +35,7 @@ Proton was created for this purpose. It identifies project structures and runtim
 - **Interactive TUI**: Navigate projects and commands with keyboard shortcuts
 - **Environment checks**: Verify required tools before running commands
 - **Plugin system**: Add custom project types through YAML plugins
+- **Automation interface**: List tasks as text or JSON and run them non-interactively by stable task ID
 - **Cross-platform**: Supports Windows, macOS, and Linux
 
 ## Quick start
@@ -181,6 +183,8 @@ go vet ./...
 
 ```text
 proton [options] [directory]
+proton list [options] [directory]
+proton run [options] <task-id> [directory]
 proton install
 proton uninstall
 
@@ -198,7 +202,12 @@ Run `proton --help` to display the current options. Examples:
 proton .
 proton --depth 1 ../workspace
 proton --no-recursive /path/to/project
+proton list --json /path/to/project
+proton run --dry-run root:run-tests /path/to/project
+proton run root:run-tests /path/to/project
 ```
+
+`proton list` shows each task's ID, shell command, and source. Add `--json` for a machine-readable catalog with a `schema_version`, suitable for scripts and AI agents. `proton run` requires an exact task ID. Tasks marked high-risk or requiring confirmation also require `--yes` for non-interactive execution.
 
 ## Supported project types
 
@@ -210,6 +219,9 @@ proton --no-recursive /path/to/project
 | Rust | `Cargo.toml` |
 | Java | `pom.xml`, `build.gradle`, `build.gradle.kts` |
 | C++ | `CMakeLists.txt`, `meson.build` |
+| just | `justfile`, `Justfile`, `.justfile` |
+| Task | `Taskfile.yml`, `Taskfile.yaml`, and lowercase variants |
+| SwiftUI (iOS, macOS only) | `*.xcodeproj`, verified through iOS build settings and SwiftUI source imports |
 
 ## Configuration
 
@@ -230,6 +242,8 @@ Create `.proton.yaml` in the project root:
 plugins:
   - /path/to/project-specific-plugin.yaml
 ```
+
+Relative plugin paths are resolved from the directory containing the configuration file. Proton reads the target project's `.proton.yaml` even when invoked as `proton /path/to/project` from another directory.
 
 ### Custom plugins
 
@@ -262,6 +276,8 @@ env:
 
 Command metadata is optional. Set `confirm: true` or `risk: high` for commands that must not execute with a single keypress. Proton treats plugin files as trusted shell configuration, so review third-party plugins before installing them.
 
+`detect.files` and `detect.dirs` support the `*`, `?`, and `[...]` filename glob patterns.
+
 Built-in plugins adapt their recommendations to the detected project:
 
 - Node.js reads `package.json` scripts and detects npm, pnpm, Yarn, or Bun from lock files.
@@ -270,6 +286,8 @@ Built-in plugins adapt their recommendations to the detected project:
 - Maven aggregators recursively discover runnable modules that declare `spring-boot-maven-plugin` and expose reactor-relative `-pl` run commands on the root page; default-active Cloud profiles are disabled for normal Boot commands.
 - Gradle prefers `gradlew` or `gradlew.bat` when a wrapper is available.
 - C++ selects CMake and/or Meson commands from the actual build files.
+- Justfiles and Taskfiles are read as declared task sources, excluding private or internal tasks.
+- SwiftUI iOS projects detect Xcode projects, workspaces, and schemes. Proton can open Xcode, list schemes, perform a build-only operation, or build, install, and launch the app in iOS Simulator. Projects with test targets can also run tests on an automatically selected simulator.
 
 ## License
 

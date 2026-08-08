@@ -4,9 +4,9 @@
 [![Release](https://img.shields.io/github/v/release/cyamoyed/proton)](https://github.com/cyamoyed/proton/releases/latest)
 [![License](https://img.shields.io/github/license/cyamoyed/proton)](LICENSE)
 
-> 面向 AI 辅助开发工作流的轻量级项目启动器。
+> 面向陌生仓库和多语言 Monorepo 的零配置任务发现与执行工具。
 
-Proton 可以自动识别项目类型和运行环境，并通过交互式终端界面提供与当前项目相关的常用命令。无需持续运行重量级 IDE，即可快速启动服务、执行测试和完成构建。
+Proton 自动识别项目类型、现有任务和运行环境，并通过交互式终端或机器可读 CLI 提供当前项目实际可用的命令。它既适合开发者快速启动服务、测试和构建，也可以作为 AI Agent 的本地任务目录。
 
 ## 目录
 
@@ -18,6 +18,7 @@ Proton 可以自动识别项目类型和运行环境，并通过交互式终端�
 - [使用方法](#使用方法)
 - [支持的项目类型](#支持的项目类型)
 - [配置](#配置)
+- [开发路线图](ROADMAP.md)
 - [参与贡献](#参与贡献)
 - [许可证](#许可证)
 
@@ -34,6 +35,7 @@ Proton 因此而诞生：通过识别项目结构和运行环境，将常用开�
 - **交互式终端界面**：使用键盘快捷键浏览项目和执行命令
 - **环境检查**：执行命令前检查必需的开发工具是否已经安装
 - **插件系统**：通过 YAML 插件扩展并添加自定义项目类型
+- **自动化接口**：以文本或 JSON 列出任务，并通过稳定任务 ID 非交互执行
 - **跨平台**：支持 Windows、macOS 和 Linux
 
 ## 快速开始
@@ -181,6 +183,8 @@ go vet ./...
 
 ```text
 proton [选项] [目录]
+proton list [选项] [目录]
+proton run [选项] <任务 ID> [目录]
 proton install
 proton uninstall
 
@@ -198,7 +202,12 @@ proton uninstall
 proton .
 proton --depth 1 ../workspace
 proton --no-recursive /path/to/project
+proton list --json /path/to/project
+proton run --dry-run root:run-tests /path/to/project
+proton run root:run-tests /path/to/project
 ```
+
+`proton list` 会显示每项任务的 ID、Shell 命令及来源；`--json` 输出带有 `schema_version` 的机器可读任务目录，适合脚本和 AI Agent 使用。`proton run` 只接受完整任务 ID。对于标记为高风险或需要确认的任务，非交互执行还必须传入 `--yes`。
 
 ## 支持的项目类型
 
@@ -210,6 +219,9 @@ proton --no-recursive /path/to/project
 | Rust | `Cargo.toml` |
 | Java | `pom.xml`、`build.gradle`、`build.gradle.kts` |
 | C++ | `CMakeLists.txt`、`meson.build` |
+| just | `justfile`、`Justfile`、`.justfile` |
+| Task | `Taskfile.yml`、`Taskfile.yaml` 及小写变体 |
+| SwiftUI (iOS，仅 macOS) | `*.xcodeproj`，并校验 iOS 构建设置和 SwiftUI 源码 |
 
 ## 配置
 
@@ -230,6 +242,8 @@ plugins:
 plugins:
   - /path/to/project-specific-plugin.yaml
 ```
+
+相对插件路径以声明它的配置文件所在目录为基准。即使从其他目录运行 `proton /path/to/project`，Proton 也会读取目标项目中的 `.proton.yaml`。
 
 ### 自定义插件
 
@@ -262,6 +276,8 @@ env:
 
 命令元数据是可选的。如果命令不能通过一次按键直接执行，可以设置 `confirm: true` 或 `risk: high`。Proton 会将插件文件视为可信 Shell 配置，请在安装第三方插件前检查其内容。
 
+`detect.files` 和 `detect.dirs` 支持 `*`、`?` 和 `[...]` 文件名通配符。
+
 内置插件会根据检测到的项目进一步调整推荐命令：
 
 - Node.js 读取 `package.json` 中的脚本，并通过锁文件识别 npm、pnpm、Yarn 或 Bun。
@@ -270,6 +286,8 @@ env:
 - Maven 聚合器会递归发现声明 `spring-boot-maven-plugin` 的可运行模块，在根页面提供基于 `-pl` 的模块启动命令；默认激活的 Cloud Profile 会在普通 Boot 命令中自动停用。
 - 存在 Gradle Wrapper 时优先使用 `gradlew` 或 `gradlew.bat`。
 - C++ 根据实际构建文件选择 CMake 和/或 Meson 命令。
+- Justfile 和 Taskfile 直接读取已声明的公开任务，并忽略私有或内部任务。
+- SwiftUI iOS 项目会识别 Xcode Project、Workspace 和 Scheme，提供打开 Xcode、列出 Scheme、纯构建以及在 iOS Simulator 中安装并启动 App 的命令；项目包含测试 Target 时还可以自动选择可用模拟器运行测试。
 
 ## 许可证
 

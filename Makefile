@@ -9,13 +9,13 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 # Platforms
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
-.PHONY: all build clean test vet fmt install build-all
+.PHONY: all build clean test vet fmt install build-all checksums
 
 all: build
 
 ## build: Build for the current platform
 build:
-	go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME)$(if $(filter windows,$(GOOS)),.exe) $(CMD_DIR)
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME)$(if $(filter windows,$(GOOS)),.exe) $(CMD_DIR)
 	@cp $(BUILD_DIR)/$(APP_NAME)$(if $(filter windows,$(GOOS)),.exe) $(BUILD_DIR)/$(APP_NAME)-installer$(if $(filter windows,$(GOOS)),.exe) 2>/dev/null || true
 	@cp scripts/proton$(if $(filter windows,$(GOOS)),.bat,.sh) $(BUILD_DIR)/ 2>/dev/null || true
 	@echo "Built: $(BUILD_DIR)/$(APP_NAME)"
@@ -29,10 +29,19 @@ build-all: clean
 		wrapper="proton.sh" ; \
 		if [ "$$GOOS" = "windows" ]; then suffix=".exe"; wrapper="proton.bat"; fi ; \
 		echo "Building $$GOOS/$$GOARCH..." ; \
-		GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME)-$$GOOS-$$GOARCH$$suffix $(CMD_DIR) ; \
+		CGO_ENABLED=0 GOOS=$$GOOS GOARCH=$$GOARCH go build -trimpath -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME)-$$GOOS-$$GOARCH$$suffix $(CMD_DIR) ; \
 		cp $(BUILD_DIR)/$(APP_NAME)-$$GOOS-$$GOARCH$$suffix $(BUILD_DIR)/$(APP_NAME)-installer-$$GOOS-$$GOARCH$$suffix ; \
 	done
 	@echo "All builds complete in $(BUILD_DIR)/"
+
+## checksums: Create SHA-256 checksums for release artifacts
+checksums:
+	@cd $(BUILD_DIR) && if command -v sha256sum >/dev/null 2>&1; then \
+		sha256sum proton-* > checksums.txt ; \
+	else \
+		shasum -a 256 proton-* > checksums.txt ; \
+	fi
+	@echo "Checksums: $(BUILD_DIR)/checksums.txt"
 
 ## install: Install to GOPATH/bin
 install:
