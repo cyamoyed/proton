@@ -1,0 +1,13 @@
+name: swiftui-ios
+version: 1.0
+detect:
+  dirs: ["*.xcodeproj"]
+commands:
+  - name: Open in Xcode
+    run: "open ."
+  - name: Build for iOS Simulator
+    run: "xcodebuild build"
+env:
+  - name: Xcode
+    check: "xcodebuild -version"
+    required: true

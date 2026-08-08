@@ -1,0 +1,11 @@
+name: taskfile
+version: 1.0
+detect:
+  files: ["Taskfile.yml", "Taskfile.yaml", "taskfile.yml", "taskfile.yaml"]
+commands:
+  - name: List tasks
+    run: "task --list"
+env:
+  - name: task
+    check: "task --version"
+    required: true

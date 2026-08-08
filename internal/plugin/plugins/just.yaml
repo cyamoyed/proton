@@ -1,0 +1,11 @@
+name: just
+version: 1.0
+detect:
+  files: ["justfile", "Justfile", ".justfile"]
+commands:
+  - name: List recipes
+    run: "just --list"
+env:
+  - name: just
+    check: "just --version"
+    required: true
