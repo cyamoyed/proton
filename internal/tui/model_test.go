@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -112,6 +113,71 @@ func TestModelConfirmsRiskyCommand(t *testing.T) {
 	m = updated.(Model)
 	if !m.executeOnExit || m.executeCmd != "deploy" {
 		t.Fatalf("confirmed command was not selected: %+v", m)
+	}
+}
+
+func TestModelViewUsesChineseLabels(t *testing.T) {
+	m := NewModel([]*detector.DetectedProject{{
+		Plugin: &plugin.Plugin{
+			Name:     "go",
+			Commands: []plugin.Command{{Name: "Run", Run: "go run ."}},
+			Env:      []plugin.EnvCheck{{Name: "go"}},
+		},
+		Types: []string{"go"},
+		Dir:   t.TempDir(),
+	}})
+	m.envChecking = false
+	m.envStatus = []envcheck.EnvStatus{{Name: "go", OK: true, Version: "go version go1.22.1"}}
+
+	view := m.View()
+	for _, want := range []string{"项目", "命令", "环境", "执行命令", "Proton 项目启动器"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("View() missing %q in output:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "Commands") || strings.Contains(view, "Environment") {
+		t.Errorf("View() still contains English labels:\n%s", view)
+	}
+}
+
+func TestModelViewSwitchesPanels(t *testing.T) {
+	m := NewModel([]*detector.DetectedProject{{
+		Plugin: &plugin.Plugin{
+			Name:     "go",
+			Commands: []plugin.Command{{Name: "Run", Run: "go run ."}},
+			Env:      []plugin.EnvCheck{{Name: "go"}},
+		},
+		Types: []string{"go"},
+		Dir:   t.TempDir(),
+	}})
+	m.envChecking = false
+	m.envStatus = []envcheck.EnvStatus{{Name: "go", OK: true}}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	if m.panel != envPanel {
+		t.Fatalf("panel = %d, want envPanel", m.panel)
+	}
+	if !strings.Contains(m.View(), "✓ go") {
+		t.Fatalf("environment row not visible after switching panel:\n%s", m.View())
+	}
+}
+
+func TestTruncate(t *testing.T) {
+	cases := []struct {
+		in   string
+		max  int
+		want string
+	}{
+		{"abc", 5, "abc"},
+		{"abcdefgh", 5, "abcd…"},
+		{"中文字符串很长", 9, "中文字符…"},
+		{"", 3, ""},
+	}
+	for _, c := range cases {
+		if got := truncate(c.in, c.max); got != c.want {
+			t.Errorf("truncate(%q, %d) = %q, want %q", c.in, c.max, got, c.want)
+		}
 	}
 }
 

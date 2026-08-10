@@ -5,9 +5,11 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/cyamoyed/proton/internal/detector"
 	"github.com/cyamoyed/proton/internal/envcheck"
 	"github.com/cyamoyed/proton/internal/plugin"
+	"github.com/mattn/go-runewidth"
 )
 
 type panel int
@@ -49,6 +51,7 @@ type Model struct {
 	confirming    bool
 	pending       plugin.Command
 	notice        string
+	width         int
 }
 
 // NewModel creates a new TUI model
@@ -57,6 +60,7 @@ func NewModel(projects []*detector.DetectedProject) Model {
 		projects: projects,
 		current:  0,
 		panel:    commandsPanel,
+		width:    80,
 	}
 
 	if len(projects) > 0 {
@@ -85,6 +89,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.envChecking = false
 		return m, nil
 
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+
 	case tea.KeyMsg:
 		if m.confirming {
 			switch msg.String() {
@@ -97,7 +104,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "n", "N", "esc", "q":
 				m.confirming = false
 				m.pending = plugin.Command{}
-				m.notice = "Execution cancelled"
+				m.notice = "已取消执行"
 			}
 			return m, nil
 		}
@@ -139,11 +146,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				if m.envChecking {
-					m.notice = "Wait for the environment check to finish"
+					m.notice = "请等待环境检查完成"
 					return m, nil
 				}
 				if missing := missingRequiredForCommand(m.envStatus, selected.Checks); len(missing) > 0 {
-					m.notice = "Cannot execute: missing required tools: " + fmt.Sprintf("%v", missing)
+					m.notice = "无法执行：缺少必需工具：" + strings.Join(missing, "、")
 					return m, nil
 				}
 				if selected.Confirm || selected.Risk == "high" {
@@ -195,80 +202,249 @@ func (m Model) View() string {
 	}
 
 	if len(m.projects) == 0 {
-		return "No projects detected in current directory.\n"
+		return "\n  " + infoStyle.Render("未检测到项目，请确认当前目录包含受支持的项目文件。") + "\n"
 	}
+
+	width := m.width
+	if width < 40 {
+		width = 80 // 终端尺寸未知时使用默认宽度
+	}
+	contentWidth := width - 4 // 边框(2) + 内边距(2)
 
 	project := m.projects[m.current]
 
-	// Title
-	title := titleStyle.Render("Proton - Project Launcher")
+	var sections []string
 
-	// Project info
-	info := fmt.Sprintf("%s %s\n%s %s\n%s %s",
-		headerStyle.Render("Project:"),
-		filepathBase(project.Dir),
-		headerStyle.Render("Type:"),
-		strings.Join(project.Types, ", "),
-		headerStyle.Render("Location:"),
-		project.Dir,
-	)
+	// 标题栏
+	sections = append(sections,
+		lipgloss.PlaceHorizontal(width, lipgloss.Center, titleStyle.Render(" Proton 项目启动器 ")))
 
-	// Environment panel
-	envView := headerStyle.Render("Environment") + "\n"
-	if m.envChecking {
-		envView += "  Checking environment...\n"
+	// 项目信息面板
+	projectTitle := "项目"
+	if len(m.projects) > 1 {
+		projectTitle = fmt.Sprintf("项目 %d/%d", m.current+1, len(m.projects))
+	}
+	var infoLines []string
+	infoLines = append(infoLines, labelLine("名称", selectedStyle.Render(filepathBase(project.Dir))))
+	infoLines = append(infoLines, labelLine("类型", strings.Join(project.Types, ", ")))
+	infoLines = append(infoLines, labelLine("位置", dimStyle.Render(truncate(project.Dir, contentWidth-6))))
+	sections = append(sections, renderPanel(projectTitle, infoLines, contentWidth))
+
+	// 命令面板
+	var cmdLines []string
+	if len(m.commands) == 0 {
+		cmdLines = append(cmdLines, infoStyle.Render("无可用命令"))
 	} else {
+		for i, cmd := range m.commands {
+			row, _ := commandRow(cmd, m.panel == commandsPanel && i == m.cursor, contentWidth)
+			cmdLines = append(cmdLines, row)
+		}
+		if m.panel == commandsPanel && m.cursor < len(m.commands) {
+			selected := m.commands[m.cursor]
+			var detail []string
+			if selected.Description != "" {
+				detail = append(detail, wrapText(selected.Description, contentWidth-2))
+			}
+			if selected.Source != "" {
+				detail = append(detail, dimStyle.Render("来源："+truncate(selected.Source, contentWidth-6)))
+			}
+			if _, truncated := commandRow(selected, true, contentWidth); truncated {
+				// 行内放不下时，在详情区显示完整命令
+				detail = append(detail, dimStyle.Render("$ "+wrapText(selected.Run, contentWidth-4)))
+			}
+			if len(detail) > 0 {
+				cmdLines = append(cmdLines, append([]string{""}, detail...)...)
+			}
+		}
+	}
+	sections = append(sections, renderPanel("命令", cmdLines, contentWidth))
+
+	// 环境面板
+	var envLines []string
+	switch {
+	case m.envChecking:
+		envLines = append(envLines, checkingStyle.Render("⟳ 正在检查环境…"))
+	case len(m.envStatus) == 0:
+		envLines = append(envLines, infoStyle.Render("无环境检查"))
+	default:
 		for i, status := range m.envStatus {
-			prefix := "  "
-			if i == m.cursor && m.panel == envPanel {
-				prefix = "> "
+			envLines = append(envLines, envRow(status, m.panel == envPanel && i == m.cursor, contentWidth))
+		}
+	}
+	sections = append(sections, renderPanel("环境", envLines, contentWidth))
+
+	// 底部提示
+	var footer string
+	switch {
+	case m.confirming:
+		footer = renderConfirm(m.pending, contentWidth)
+	case m.notice != "":
+		footer = warningStyle.Render("⚠ " + m.notice)
+	default:
+		footer = renderHelp()
+	}
+	sections = append(sections, footer)
+
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// renderPanel 渲染带标题和边框的面板
+func renderPanel(title string, lines []string, contentWidth int) string {
+	var b strings.Builder
+	b.WriteString(panelTitleStyle.Render(title))
+	b.WriteString("\n")
+	b.WriteString(dividerStyle.Render(strings.Repeat("─", contentWidth)))
+	for _, line := range lines {
+		b.WriteString("\n")
+		b.WriteString(padRight(line, contentWidth))
+	}
+	return panelStyle.Render(b.String())
+}
+
+// padRight 用空格补齐到指定显示宽度
+func padRight(s string, w int) string {
+	if w <= 0 {
+		return s
+	}
+	if width := lipgloss.Width(s); width < w {
+		return s + strings.Repeat(" ", w-width)
+	}
+	return s
+}
+
+// labelLine 渲染「标签 值」行，标签列宽固定为 6
+func labelLine(label, value string) string {
+	return headerStyle.Render(label) + strings.Repeat(" ", 6-lipgloss.Width(label)) + value
+}
+
+// wrapText 按显示宽度自动换行
+func wrapText(s string, w int) string {
+	if w < 1 {
+		return s
+	}
+	return lipgloss.NewStyle().Width(w).Render(s)
+}
+
+// truncate 按显示宽度截断文本，超出部分以省略号代替
+func truncate(s string, max int) string {
+	if max <= 0 || lipgloss.Width(s) <= max {
+		return s
+	}
+	runes := []rune(s)
+	used := 0
+	cut := 0
+	for i, r := range runes {
+		width := runewidth.RuneWidth(r)
+		if used+width > max-1 {
+			cut = i
+			break
+		}
+		used += width
+		cut = i + 1
+	}
+	return string(runes[:cut]) + "…"
+}
+
+// commandRow 渲染单条命令行：名称 + 原命令 + 风险徽标。
+// 返回是否因宽度不足截断了原命令。
+func commandRow(cmd plugin.Command, selected bool, contentWidth int) (string, bool) {
+	mark := "  "
+	name := cmd.Name
+	if selected {
+		mark = cursorStyle.Render("▶ ")
+		name = selectedStyle.Render(name)
+	}
+	line := mark + name
+	badge := ""
+	if b, ok := riskBadge(cmd.Risk); ok {
+		badge = b
+	}
+	truncated := false
+	if cmd.Run != "" {
+		run := "$ " + cmd.Run
+		runMax := contentWidth - 2 - lipgloss.Width(line) - lipgloss.Width(badge) - 3
+		if runMax < 8 {
+			runMax = 8
+		}
+		shown := truncate(run, runMax)
+		if shown != run {
+			truncated = true
+		}
+		line += dimStyle.Render("  " + shown)
+	}
+	if badge != "" {
+		pad := contentWidth - 2 - lipgloss.Width(line) - lipgloss.Width(badge)
+		if pad > 1 {
+			line += strings.Repeat(" ", pad) + badge
+		} else {
+			line += " " + badge
+		}
+	}
+	return line, truncated
+}
+
+// riskBadge 将风险等级映射为中文徽标
+func riskBadge(risk string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(risk)) {
+	case "", "-", "none":
+		return "", false
+	case "high":
+		return riskHighStyle.Render("[高危]"), true
+	case "medium":
+		return riskMidStyle.Render("[中危]"), true
+	case "low":
+		return riskLowStyle.Render("[低危]"), true
+	default:
+		return riskMidStyle.Render("[" + risk + "]"), true
+	}
+}
+
+// envRow 渲染单条环境检查结果
+func envRow(status envcheck.EnvStatus, selected bool, contentWidth int) string {
+	mark := "  "
+	if selected {
+		mark = cursorStyle.Render("▶ ")
+	}
+	if status.OK {
+		line := mark + envOKStyle.Render("✓ "+status.Name)
+		if status.Version != "" {
+			pad := 14 - lipgloss.Width(status.Name)
+			if pad < 1 {
+				pad = 1
 			}
-
-			if status.OK {
-				envView += envOKStyle.Render(fmt.Sprintf("%s✓ %s %s", prefix, status.Name, status.Version)) + "\n"
-			} else {
-				envView += envFailStyle.Render(fmt.Sprintf("%s✗ %s (not installed)", prefix, status.Name)) + "\n"
+			versionWidth := contentWidth - 18
+			if versionWidth < 10 {
+				versionWidth = 10
 			}
+			line += strings.Repeat(" ", pad) + dimStyle.Render(truncate(status.Version, versionWidth))
 		}
+		return line
 	}
+	line := mark + envFailStyle.Render("✗ "+status.Name)
+	if status.Required {
+		line += " " + requiredTagStyle.Render("必需")
+	} else {
+		line += " " + dimStyle.Render("未安装")
+	}
+	return line
+}
 
-	// Commands panel
-	cmdView := headerStyle.Render("Commands") + "                    " + helpStyle.Render("[Tab] to switch") + "\n"
-	for i, cmd := range m.commands {
-		prefix := " "
-		if i == m.cursor && m.panel == commandsPanel {
-			prefix = ">"
-		}
-		risk := ""
-		if cmd.Risk != "" {
-			risk = " [" + cmd.Risk + "]"
-		}
-		cmdView += fmt.Sprintf("%s %s%s  %s\n", prefix, cmd.Name, risk, helpStyle.Render(cmd.Run))
-	}
-	if m.panel == commandsPanel && m.cursor < len(m.commands) {
-		selected := m.commands[m.cursor]
-		var details []string
-		if selected.Description != "" {
-			details = append(details, selected.Description)
-		}
-		if selected.Source != "" {
-			details = append(details, "Source: "+selected.Source)
-		}
-		if len(details) > 0 {
-			cmdView += "\n" + helpStyle.Render(strings.Join(details, "\n")) + "\n"
-		}
-	}
+// renderHelp 渲染底部快捷键提示
+func renderHelp() string {
+	key := func(label string) string { return keyStyle.Render(label) }
+	return footerStyle.Render(fmt.Sprintf(
+		"%s 执行命令    %s 切换面板    %s 切换项目    %s 退出",
+		key("Enter"), key("Tab"), key("← →"), key("q"),
+	))
+}
 
-	// Help
-	help := helpStyle.Render("[Enter] Execute   [←/→] Switch Project   [q] Quit")
-	if m.confirming {
-		help = warningStyle.Render(fmt.Sprintf("Run %q? [y/Enter] Confirm  [n/Esc] Cancel", m.pending.Run))
-	} else if m.notice != "" {
-		help = warningStyle.Render(m.notice)
-	}
-
-	return fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n%s",
-		title, info, envView, cmdView, help)
+// renderConfirm 渲染确认执行提示
+func renderConfirm(pending plugin.Command, contentWidth int) string {
+	command := truncate(pending.Run, max(contentWidth-6, 20))
+	key := func(label string) string { return keyStyle.Render(label) }
+	content := fmt.Sprintf("确认执行以下命令？\n\n    %s\n\n  %s 确认    %s 取消",
+		command, key("y / Enter"), key("n / Esc"))
+	return confirmBoxStyle.Width(contentWidth + 2).Render(content)
 }
 
 func missingRequired(statuses []envcheck.EnvStatus) []string {
