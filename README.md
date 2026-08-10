@@ -207,7 +207,7 @@ proton run --dry-run root:运行测试 /path/to/project
 proton run root:运行测试 /path/to/project
 ```
 
-`proton list` 会显示每项任务的 ID、Shell 命令及来源；`--json` 输出带有 `schema_version` 的机器可读任务目录，适合脚本和 AI Agent 使用。`proton run` 只接受完整任务 ID。对于标记为高风险或需要确认的任务，非交互执行还必须传入 `--yes`。
+`proton list` 按项目分组、一行一条地显示任务：启动命令排在最前并标记 `▶`，每个任务一行（名称 + Shell 命令）。任务 ID 由组头的「ID 前缀」加行尾 `(ID: ...)` 拼接而成（行尾仅在短 ID 与任务名不同时显示），例如 `proton run jeecg-server-cloud/jeecg-visual/jeecg-cloud-xxljob:运行-spring-cloud-服务`。列表只包含含启动类（应用启动入口）的模块——公共库、聚合根等无启动入口的模块自动隐藏（若扫描范围内没有任何可启动模块，则列出全部）。`--json` 始终输出完整目录，带有 `schema_version`，适合脚本和 AI Agent 使用。`proton run` 只接受完整任务 ID。对于标记为高风险或需要确认的任务，非交互执行还必须传入 `--yes`。
 
 ## 支持的项目类型
 
