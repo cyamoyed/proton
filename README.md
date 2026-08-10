@@ -203,8 +203,8 @@ proton .
 proton --depth 1 ../workspace
 proton --no-recursive /path/to/project
 proton list --json /path/to/project
-proton run --dry-run root:run-tests /path/to/project
-proton run root:run-tests /path/to/project
+proton run --dry-run root:运行测试 /path/to/project
+proton run root:运行测试 /path/to/project
 ```
 
 `proton list` 会显示每项任务的 ID、Shell 命令及来源；`--json` 输出带有 `schema_version` 的机器可读任务目录，适合脚本和 AI Agent 使用。`proton run` 只接受完整任务 ID。对于标记为高风险或需要确认的任务，非交互执行还必须传入 `--yes`。

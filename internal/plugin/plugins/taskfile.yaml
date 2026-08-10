@@ -3,7 +3,7 @@ version: 1.0
 detect:
   files: ["Taskfile.yml", "Taskfile.yaml", "taskfile.yml", "taskfile.yaml"]
 commands:
-  - name: List tasks
+  - name: 列出任务
     run: "task --list"
 env:
   - name: task

@@ -3,9 +3,9 @@ version: 1.0
 detect:
   files: ["pom.xml"]
 commands:
-  - name: Package
+  - name: 打包
     run: "mvn package"
-  - name: Run tests
+  - name: 运行测试
     run: "mvn test"
 env:
   - name: java

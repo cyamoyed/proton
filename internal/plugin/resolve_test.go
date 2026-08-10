@@ -157,7 +157,7 @@ func TestResolveSwiftUIIOSUsesWorkspaceSchemeAndAvailableSimulator(t *testing.T)
 	if !hasCommandRun(resolved.Commands, build) {
 		t.Fatalf("commands = %+v, want %q", resolved.Commands, build)
 	}
-	run := commandRunByName(resolved.Commands, "Run in iOS Simulator")
+	run := commandRunByName(resolved.Commands, "在 iOS 模拟器中运行")
 	for _, part := range []string{
 		`xcrun simctl boot "$simulator_id"`,
 		"open -a Simulator",
@@ -175,7 +175,7 @@ func TestResolveSwiftUIIOSUsesWorkspaceSchemeAndAvailableSimulator(t *testing.T)
 			t.Fatalf("run command has invalid shell syntax: %v\n%s\n%s", err, output, run)
 		}
 	}
-	testRun := commandRunByName(resolved.Commands, "Run tests")
+	testRun := commandRunByName(resolved.Commands, "运行测试")
 	if !strings.Contains(testRun, "xcrun simctl list devices available") || !strings.Contains(testRun, `-destination "platform=iOS Simulator,id=$simulator_id" test`) {
 		t.Fatalf("test command = %q, want dynamic available simulator", testRun)
 	}
@@ -185,13 +185,13 @@ func TestResolveSwiftUIIOSOmitsTestsWithoutTestTarget(t *testing.T) {
 	dir := t.TempDir()
 	writeTestXcodeProject(t, dir, "Demo", "SUPPORTED_PLATFORMS = \"iphoneos iphonesimulator\";\ncom.apple.product-type.application")
 	resolved := ResolveForDir(&Plugin{Name: "swiftui-ios", Commands: []Command{{Name: "placeholder"}}}, dir)
-	if hasCommandName(resolved.Commands, "Run tests") {
+	if hasCommandName(resolved.Commands, "运行测试") {
 		t.Fatalf("commands = %+v, test command should require a test target", resolved.Commands)
 	}
 	if !hasCommandRun(resolved.Commands, "xcodebuild -project 'Demo.xcodeproj' -scheme 'Demo' -configuration Debug -destination 'generic/platform=iOS Simulator' build") {
 		t.Fatalf("commands = %+v, want project build command", resolved.Commands)
 	}
-	if !hasCommandName(resolved.Commands, "Run in iOS Simulator") {
+	if !hasCommandName(resolved.Commands, "在 iOS 模拟器中运行") {
 		t.Fatalf("commands = %+v, want simulator run command for app target", resolved.Commands)
 	}
 }
@@ -220,21 +220,21 @@ func TestResolveMavenProjectTypes(t *testing.T) {
 			name:     "jar",
 			pom:      `<project><modelVersion>4.0.0</modelVersion></project>`,
 			wantRuns: []string{"mvn compile", "mvn test", "mvn package", "mvn verify", "mvn install", "mvn dependency:tree"},
-			wantName: "Package JAR",
+			wantName: "打包 JAR",
 			wantType: "java-maven",
 		},
 		{
 			name:     "war",
 			pom:      `<project><packaging>war</packaging></project>`,
 			wantRuns: []string{"mvn package"},
-			wantName: "Package WAR",
+			wantName: "打包 WAR",
 			wantType: "java-maven",
 		},
 		{
 			name:     "multi-module",
 			pom:      `<project><packaging>pom</packaging><modules><module>api</module><module>app</module></modules></project>`,
 			wantRuns: []string{"mvn package", "mvn test", "mvn verify", "mvn install"},
-			wantName: "Build all modules",
+			wantName: "构建全部模块",
 			wantType: "java-maven",
 		},
 		{
@@ -242,7 +242,7 @@ func TestResolveMavenProjectTypes(t *testing.T) {
 			pom: `<project><parent><artifactId>spring-boot-starter-parent</artifactId></parent>` +
 				`<build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>`,
 			wantRuns: []string{"mvn spring-boot:run"},
-			wantName: "Run Spring Boot",
+			wantName: "运行 Spring Boot",
 			wantType: "spring-boot-maven",
 		},
 		{
@@ -252,7 +252,7 @@ func TestResolveMavenProjectTypes(t *testing.T) {
 				`<plugin><artifactId>exec-maven-plugin</artifactId></plugin>` +
 				`</plugins></build></project>`,
 			wantRuns: []string{"mvn quarkus:dev", "mvn exec:java"},
-			wantName: "Run application",
+			wantName: "运行应用",
 			wantType: "java-maven",
 		},
 	}
@@ -294,14 +294,14 @@ func TestResolveMavenDistinguishesBootRootFromCloudReactor(t *testing.T) {
 				`<dependencyManagement><dependencies><dependency><groupId>org.springframework.cloud</groupId><artifactId>spring-cloud-dependencies</artifactId></dependency></dependencies></dependencyManagement>` +
 				`<profiles><profile><id>SpringCloud</id><modules><module>server-cloud</module></modules></profile></profiles></project>`,
 			wantType:    "spring-boot-maven",
-			wantCommand: "Build Spring Boot modules",
+			wantCommand: "构建 Spring Boot 模块",
 		},
 		{
 			name: "Cloud reactor identified by structure",
 			pom: `<project><parent><artifactId>platform-parent</artifactId></parent><artifactId>server-cloud</artifactId><name>SERVER CLOUD</name>` +
 				`<packaging>pom</packaging><modules><module>cloud-gateway</module><module>cloud-nacos</module><module>system-cloud-start</module></modules></project>`,
 			wantType:    "spring-cloud-maven",
-			wantCommand: "Build Spring Cloud modules",
+			wantCommand: "构建 Spring Cloud 模块",
 		},
 		{
 			name: "Cloud service identified by direct custom starter",
@@ -309,7 +309,7 @@ func TestResolveMavenDistinguishesBootRootFromCloudReactor(t *testing.T) {
 				`<dependencies><dependency><groupId>example</groupId><artifactId>example-boot-starter-cloud</artifactId></dependency></dependencies>` +
 				`<build><plugins><plugin><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build></project>`,
 			wantType:     "spring-cloud-maven",
-			wantCommand:  "Run Spring Cloud service",
+			wantCommand:  "运行 Spring Cloud 服务",
 			wantCloudRun: true,
 		},
 	}
@@ -343,7 +343,7 @@ func TestResolveMavenClassifiesMalformedCloudPom(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolved := ResolveForDir(mavenPlugin(), dir)
-	if resolved.Name != "spring-cloud-maven" || !hasCommandName(resolved.Commands, "Run Spring Cloud service") {
+	if resolved.Name != "spring-cloud-maven" || !hasCommandName(resolved.Commands, "运行 Spring Cloud 服务") {
 		t.Fatalf("malformed Cloud POM resolved as %+v", resolved)
 	}
 }

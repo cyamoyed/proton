@@ -3,11 +3,11 @@ version: 1.0
 detect:
   files: ["build.gradle", "build.gradle.kts"]
 commands:
-  - name: Build
+  - name: 构建
     run: "gradle build"
-  - name: Run
+  - name: 运行
     run: "gradle run"
-  - name: Run tests
+  - name: 运行测试
     run: "gradle test"
 env:
   - name: java

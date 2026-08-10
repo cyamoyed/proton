@@ -49,7 +49,7 @@ func TestRunListJSON(t *testing.T) {
 	if len(output.Tasks) != 4 {
 		t.Fatalf("tasks = %d, want 4: %+v", len(output.Tasks), output.Tasks)
 	}
-	if output.Tasks[1].ID != "root:run-tests" || output.Tasks[1].Source != "package.json" {
+	if output.Tasks[1].ID != "root:运行测试" || output.Tasks[1].Source != "package.json" {
 		t.Fatalf("test task = %+v", output.Tasks[1])
 	}
 	if output.Tasks[2].Name != "alpha" || output.Tasks[3].Name != "zeta" {
@@ -65,7 +65,7 @@ func TestRunTaskDryRun(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	err := runTask([]string{"--dry-run", "--no-recursive", "root:run-tests", dir}, &stdout, &stderr)
+	err := runTask([]string{"--dry-run", "--no-recursive", "root:运行测试", dir}, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("runTask() error = %v, stderr = %s", err, stderr.String())
 	}

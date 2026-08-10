@@ -3,15 +3,15 @@ version: 1.0
 detect:
   files: ["go.mod"]
 commands:
-  - name: Download dependencies
+  - name: 下载依赖
     run: "go mod download"
-  - name: Run
+  - name: 运行
     run: "go run ."
-  - name: Build
+  - name: 构建
     run: "go build ."
-  - name: Run tests
+  - name: 运行测试
     run: "go test ./..."
-  - name: Vet
+  - name: 代码检查
     run: "go vet ./..."
 env:
   - name: go

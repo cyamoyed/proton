@@ -203,8 +203,8 @@ proton .
 proton --depth 1 ../workspace
 proton --no-recursive /path/to/project
 proton list --json /path/to/project
-proton run --dry-run root:run-tests /path/to/project
-proton run root:run-tests /path/to/project
+proton run --dry-run root:运行测试 /path/to/project
+proton run root:运行测试 /path/to/project
 ```
 
 `proton list` shows each task's ID, shell command, and source. Add `--json` for a machine-readable catalog with a `schema_version`, suitable for scripts and AI agents. `proton run` requires an exact task ID. Tasks marked high-risk or requiring confirmation also require `--yes` for non-interactive execution.

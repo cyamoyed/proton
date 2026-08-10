@@ -3,15 +3,15 @@ version: 1.0
 detect:
   files: ["Cargo.toml"]
 commands:
-  - name: Build
+  - name: 构建
     run: "cargo build"
-  - name: Run
+  - name: 运行
     run: "cargo run"
-  - name: Run tests
+  - name: 运行测试
     run: "cargo test"
-  - name: Lint
+  - name: 代码检查
     run: "cargo clippy"
-  - name: Format
+  - name: 格式化
     run: "cargo fmt"
 env:
   - name: rust

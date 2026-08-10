@@ -119,58 +119,58 @@ func resolveMaven(p *Plugin, dir, goos string) {
 		pluginIDs[strings.TrimSpace(buildPlugin.ArtifactID)] = true
 	}
 
-	commands := []Command{{Name: "Clean", Run: prefix + " clean", Description: "Remove Maven build output"}}
+	commands := []Command{{Name: "清理", Run: prefix + " clean", Description: "清理 Maven 构建产物"}}
 	if packaging == "pom" && len(project.Modules) > 0 {
-		buildName, testName, verifyName, installName := "Build all modules", "Test all modules", "Verify all modules", "Install all modules locally"
+		buildName, testName, verifyName, installName := "构建全部模块", "测试全部模块", "验证全部模块", "本地安装全部模块"
 		if p.Name == "spring-boot-maven" {
-			buildName, testName, verifyName, installName = "Build Spring Boot modules", "Test Spring Boot modules", "Verify Spring Boot modules", "Install Spring Boot modules locally"
+			buildName, testName, verifyName, installName = "构建 Spring Boot 模块", "测试 Spring Boot 模块", "验证 Spring Boot 模块", "本地安装 Spring Boot 模块"
 		} else if p.Name == "spring-cloud-maven" {
-			buildName, testName, verifyName, installName = "Build Spring Cloud modules", "Test Spring Cloud modules", "Verify Spring Cloud modules", "Install Spring Cloud modules locally"
+			buildName, testName, verifyName, installName = "构建 Spring Cloud 模块", "测试 Spring Cloud 模块", "验证 Spring Cloud 模块", "本地安装 Spring Cloud 模块"
 		}
 		commands = append(commands,
-			Command{Name: buildName, Run: reactorPrefix + " package", Description: "Build the complete Maven reactor"},
-			Command{Name: testName, Run: reactorPrefix + " test", Description: "Run tests across the Maven reactor"},
-			Command{Name: verifyName, Run: reactorPrefix + " verify", Description: "Run all Maven verification checks"},
-			Command{Name: installName, Run: reactorPrefix + " install", Description: "Install every reactor artifact in the local Maven repository"},
+			Command{Name: buildName, Run: reactorPrefix + " package", Description: "构建完整的 Maven 多模块项目"},
+			Command{Name: testName, Run: reactorPrefix + " test", Description: "运行 Maven 多模块项目的全部测试"},
+			Command{Name: verifyName, Run: reactorPrefix + " verify", Description: "运行所有 Maven 验证检查"},
+			Command{Name: installName, Run: reactorPrefix + " install", Description: "将所有模块安装到本地 Maven 仓库"},
 		)
 		commands = append(commands, mavenAggregatorRunCommands(dir, project, reactorPrefix, p.Name)...)
 	} else {
-		packageName := "Package"
+		packageName := "打包"
 		if packaging == "jar" || packaging == "war" || packaging == "ear" {
 			packageName += " " + strings.ToUpper(packaging)
 		}
 		commands = append(commands,
-			Command{Name: "Compile", Run: prefix + " compile", Description: "Compile main Java sources"},
-			Command{Name: "Run tests", Run: prefix + " test", Description: "Run Maven unit tests"},
-			Command{Name: packageName, Run: prefix + " package", Description: "Create the Maven " + packaging + " artifact"},
-			Command{Name: "Verify", Run: prefix + " verify", Description: "Run integration and verification checks"},
-			Command{Name: "Install locally", Run: prefix + " install", Description: "Install the artifact in the local Maven repository"},
+			Command{Name: "编译", Run: prefix + " compile", Description: "编译 Java 主源码"},
+			Command{Name: "运行测试", Run: prefix + " test", Description: "运行 Maven 单元测试"},
+			Command{Name: packageName, Run: prefix + " package", Description: "生成 Maven " + packaging + " 构件"},
+			Command{Name: "验证", Run: prefix + " verify", Description: "运行集成测试与验证检查"},
+			Command{Name: "本地安装", Run: prefix + " install", Description: "将构件安装到本地 Maven 仓库"},
 		)
 	}
 
 	if packaging != "pom" && (project.Parent.ArtifactID == "spring-boot-starter-parent" || pluginIDs["spring-boot-maven-plugin"]) {
-		name, description := "Run Spring Boot", "Start the Spring Boot application"
+		name, description := "运行 Spring Boot", "启动 Spring Boot 应用"
 		if p.Name == "spring-cloud-maven" {
-			name, description = "Run Spring Cloud service", "Start this Spring Cloud service with Spring Boot"
+			name, description = "运行 Spring Cloud 服务", "以 Spring Boot 启动该 Spring Cloud 服务"
 		}
 		commands = append(commands, Command{Name: name, Run: prefix + " spring-boot:run", Description: description})
 	}
 	if pluginIDs["quarkus-maven-plugin"] {
-		commands = append(commands, Command{Name: "Run Quarkus dev mode", Run: prefix + " quarkus:dev", Description: "Start Quarkus in development mode"})
+		commands = append(commands, Command{Name: "运行 Quarkus 开发模式", Run: prefix + " quarkus:dev", Description: "以开发模式启动 Quarkus"})
 	}
 	if pluginIDs["exec-maven-plugin"] {
-		commands = append(commands, Command{Name: "Run application", Run: prefix + " exec:java", Description: "Run the configured Java main class"})
+		commands = append(commands, Command{Name: "运行应用", Run: prefix + " exec:java", Description: "运行配置的 Java 主类"})
 	}
 	for _, profile := range project.Profiles {
 		if isCloudProfile(profile.ID, profile.Modules) {
 			commands = append(commands, Command{
-				Name:        "Build Spring Cloud profile (" + strings.TrimSpace(profile.ID) + ")",
+				Name:        "构建 Spring Cloud profile（" + strings.TrimSpace(profile.ID) + "）",
 				Run:         prefix + " -P" + strings.TrimSpace(profile.ID) + " package",
-				Description: "Build modules enabled by the Spring Cloud Maven profile",
+				Description: "构建该 Spring Cloud profile 启用的模块",
 			})
 		}
 	}
-	commands = append(commands, Command{Name: "Dependency tree", Run: prefix + " dependency:tree", Description: "Show resolved Maven dependencies"})
+	commands = append(commands, Command{Name: "依赖树", Run: prefix + " dependency:tree", Description: "查看解析出的 Maven 依赖树"})
 	p.Commands = setCommandSource(commands, "pom.xml")
 }
 
@@ -188,9 +188,9 @@ func mavenAggregatorRunCommands(dir string, project mavenProject, prefix, projec
 			framework = "Spring Cloud"
 		}
 		commands = append(commands, Command{
-			Name:        "Run " + framework + ": " + module.ArtifactID,
+			Name:        "运行 " + framework + "：" + module.ArtifactID,
 			Run:         prefix + " -pl " + quoteMavenSelector(module.RelativePath) + " spring-boot:run",
-			Description: "Start module " + module.RelativePath + "; install its reactor dependencies first if they are not available locally",
+			Description: "启动模块 " + module.RelativePath + "；若本地仓库缺少其多模块依赖，请先执行安装",
 		})
 	}
 	return commands
@@ -475,12 +475,12 @@ func resolveNode(p *Plugin, dir string) {
 	} else if exists(dir, "package-lock.json") {
 		install = "npm ci"
 	}
-	commands := []Command{{Name: "Install dependencies", Run: install, Description: "Install dependencies using the detected package manager"}}
-	preferred := []struct{ script, label string }{{"dev", "Start dev server"}, {"start", "Start"}, {"build", "Build"}, {"test", "Run tests"}, {"lint", "Lint"}, {"format", "Format"}}
+	commands := []Command{{Name: "安装依赖", Run: install, Description: "使用检测到的包管理器安装依赖"}}
+	preferred := []struct{ script, label string }{{"dev", "启动开发服务器"}, {"start", "启动"}, {"build", "构建"}, {"test", "运行测试"}, {"lint", "代码检查"}, {"format", "格式化"}}
 	seen := map[string]bool{}
 	for _, item := range preferred {
 		if _, ok := manifest.Scripts[item.script]; ok {
-			commands = append(commands, Command{Name: item.label, Run: manager + " run " + item.script, Description: "package.json script: " + item.script})
+			commands = append(commands, Command{Name: item.label, Run: manager + " run " + item.script, Description: "package.json 脚本：" + item.script})
 			seen[item.script] = true
 		}
 	}
@@ -492,7 +492,7 @@ func resolveNode(p *Plugin, dir string) {
 	}
 	sort.Strings(remaining)
 	for _, script := range remaining {
-		commands = append(commands, Command{Name: script, Run: manager + " run " + script, Description: "package.json script: " + script})
+		commands = append(commands, Command{Name: script, Run: manager + " run " + script, Description: "package.json 脚本：" + script})
 	}
 	p.Commands = setCommandSource(commands, "package.json")
 	for i := range p.Env {
@@ -506,17 +506,17 @@ func resolveNode(p *Plugin, dir string) {
 func resolvePython(p *Plugin, dir string) {
 	commands := make([]Command, 0, len(p.Commands))
 	if exists(dir, "requirements.txt") {
-		commands = append(commands, Command{Name: "Install dependencies", Run: "python -m pip install -r requirements.txt"})
+		commands = append(commands, Command{Name: "安装依赖", Run: "python -m pip install -r requirements.txt"})
 	} else if exists(dir, "Pipfile") {
-		commands = append(commands, Command{Name: "Install dependencies", Run: "pipenv install"})
+		commands = append(commands, Command{Name: "安装依赖", Run: "pipenv install"})
 	} else if exists(dir, "pyproject.toml") {
-		commands = append(commands, Command{Name: "Install project", Run: "python -m pip install -e ."})
+		commands = append(commands, Command{Name: "安装项目", Run: "python -m pip install -e ."})
 	}
 	if exists(dir, "main.py") {
-		commands = append(commands, Command{Name: "Run", Run: "python main.py"})
+		commands = append(commands, Command{Name: "运行", Run: "python main.py"})
 	}
 	if exists(dir, "pytest.ini") || exists(dir, "conftest.py") || exists(dir, "tests") || exists(dir, "test") {
-		commands = append(commands, Command{Name: "Run tests", Run: "python -m pytest"})
+		commands = append(commands, Command{Name: "运行测试", Run: "python -m pytest"})
 	}
 	if len(commands) > 0 {
 		p.Commands = setCommandSource(commands, "Python project files")
@@ -553,10 +553,10 @@ func resolveGradle(p *Plugin, dir string) {
 func resolveCpp(p *Plugin, dir string) {
 	commands := []Command{}
 	if exists(dir, "CMakeLists.txt") {
-		commands = append(commands, Command{Name: "Build (CMake)", Run: "cmake -S . -B build && cmake --build build", Source: "CMakeLists.txt"})
+		commands = append(commands, Command{Name: "构建（CMake）", Run: "cmake -S . -B build && cmake --build build", Source: "CMakeLists.txt"})
 	}
 	if exists(dir, "meson.build") {
-		commands = append(commands, Command{Name: "Build (Meson)", Run: "meson setup build && meson compile -C build", Source: "meson.build"})
+		commands = append(commands, Command{Name: "构建（Meson）", Run: "meson setup build && meson compile -C build", Source: "meson.build"})
 	}
 	if len(commands) > 0 {
 		p.Commands = commands
@@ -714,8 +714,8 @@ func resolveSwiftUIIOS(p *Plugin, dir string) {
 	}
 
 	commands := []Command{
-		{Name: "Open in Xcode", Run: "open " + openPath, Description: "Open the detected project in Xcode"},
-		{Name: "List schemes", Run: "xcodebuild " + container + " -list", Description: "Show the schemes and targets available to xcodebuild"},
+		{Name: "在 Xcode 中打开", Run: "open " + openPath, Description: "在 Xcode 中打开检测到的项目"},
+		{Name: "列出 Scheme", Run: "xcodebuild " + container + " -list", Description: "查看 xcodebuild 可用的 scheme 与 target"},
 	}
 	for _, scheme := range schemes {
 		labelSuffix := ""
@@ -724,22 +724,22 @@ func resolveSwiftUIIOS(p *Plugin, dir string) {
 		}
 		base := "xcodebuild " + container + " -scheme " + shellQuote(scheme.name)
 		commands = append(commands, Command{
-			Name:        "Build for iOS Simulator" + labelSuffix,
+			Name:        "构建 iOS 模拟器版本" + labelSuffix,
 			Run:         base + " -configuration Debug -destination " + shellQuote("generic/platform=iOS Simulator") + " build",
-			Description: "Compile the SwiftUI app without launching the iOS Simulator",
+			Description: "编译 SwiftUI 应用（不启动 iOS 模拟器）",
 		})
 		if scheme.runnable {
 			commands = append(commands, Command{
-				Name:        "Run in iOS Simulator" + labelSuffix,
+				Name:        "在 iOS 模拟器中运行" + labelSuffix,
 				Run:         simulatorRunCommand(base),
-				Description: "Boot an available iOS Simulator, build and install the app, then launch it",
+				Description: "启动可用的 iOS 模拟器，构建并安装应用后运行",
 			})
 		}
 		if scheme.hasTests {
 			commands = append(commands, Command{
-				Name:        "Run tests" + labelSuffix,
+				Name:        "运行测试" + labelSuffix,
 				Run:         simulatorSelectionCommand() + " && " + base + ` -destination "platform=iOS Simulator,id=$simulator_id" test`,
-				Description: "Run the scheme's tests on the first available iOS Simulator",
+				Description: "在第一个可用的 iOS 模拟器上运行该 scheme 的测试",
 			})
 		}
 	}

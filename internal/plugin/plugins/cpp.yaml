@@ -3,9 +3,9 @@ version: 1.0
 detect:
   files: ["CMakeLists.txt", "meson.build"]
 commands:
-  - name: Build (cmake)
+  - name: 构建（CMake）
     run: "cmake -B build && cmake --build build"
-  - name: Build (make)
+  - name: 构建（Make）
     run: "make"
 env:
   - name: cmake

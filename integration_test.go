@@ -304,10 +304,10 @@ func TestIntegrationMavenProjectCommandMatrix(t *testing.T) {
 		dir         string
 		wantCommand string
 	}{
-		{name: "jar", dir: filepath.Join("testdata", "maven", "simple-jar"), wantCommand: "Package JAR"},
-		{name: "war", dir: filepath.Join("testdata", "maven", "web-war"), wantCommand: "Package WAR"},
-		{name: "reactor", dir: filepath.Join("testdata", "maven", "multi-module"), wantCommand: "Build all modules"},
-		{name: "executable module", dir: filepath.Join("testdata", "maven", "multi-module", "application"), wantCommand: "Run application"},
+		{name: "jar", dir: filepath.Join("testdata", "maven", "simple-jar"), wantCommand: "打包 JAR"},
+		{name: "war", dir: filepath.Join("testdata", "maven", "web-war"), wantCommand: "打包 WAR"},
+		{name: "reactor", dir: filepath.Join("testdata", "maven", "multi-module"), wantCommand: "构建全部模块"},
+		{name: "executable module", dir: filepath.Join("testdata", "maven", "multi-module", "application"), wantCommand: "运行应用"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

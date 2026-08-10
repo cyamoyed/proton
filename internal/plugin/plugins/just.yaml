@@ -3,7 +3,7 @@ version: 1.0
 detect:
   files: ["justfile", "Justfile", ".justfile"]
 commands:
-  - name: List recipes
+  - name: 列出任务
     run: "just --list"
 env:
   - name: just

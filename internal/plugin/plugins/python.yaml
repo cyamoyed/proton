@@ -3,11 +3,11 @@ version: 1.0
 detect:
   files: ["requirements.txt", "pyproject.toml", "setup.py", "Pipfile"]
 commands:
-  - name: Install dependencies
+  - name: 安装依赖
     run: "pip install -r requirements.txt"
-  - name: Run
+  - name: 运行
     run: "python main.py"
-  - name: Run tests
+  - name: 运行测试
     run: "pytest"
 env:
   - name: python

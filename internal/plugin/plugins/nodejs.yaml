@@ -3,15 +3,15 @@ version: 1.0
 detect:
   files: ["package.json"]
 commands:
-  - name: Install dependencies
+  - name: 安装依赖
     run: "npm install"
-  - name: Start dev server
+  - name: 启动开发服务器
     run: "npm run dev"
-  - name: Build
+  - name: 构建
     run: "npm run build"
-  - name: Run tests
+  - name: 运行测试
     run: "npm test"
-  - name: Lint
+  - name: 代码检查
     run: "npm run lint"
 env:
   - name: node
