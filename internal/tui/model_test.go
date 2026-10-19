@@ -181,6 +181,36 @@ func TestTruncate(t *testing.T) {
 	}
 }
 
+func TestNeedsPowerShell(t *testing.T) {
+	// Commands that should use cmd.exe (no PowerShell needed)
+	for _, cmd := range []string{
+		"npm run start",
+		"npm test",
+		"go build ./...",
+		"python main.py",
+		"cargo build",
+		"make all",
+		"echo hello world",
+	} {
+		if needsPowerShell(cmd) {
+			t.Errorf("needsPowerShell(%q) = true, want false", cmd)
+		}
+	}
+	// Commands that should use PowerShell
+	for _, cmd := range []string{
+		"Get-Content file.txt",
+		"echo $HOME",
+		"$_ = 'test'",
+		"Invoke-WebRequest url",
+		"where-Object { $_.Name -eq 'foo' }",
+		"@('a','b') | ForEach-Object { $_ }",
+	} {
+		if !needsPowerShell(cmd) {
+			t.Errorf("needsPowerShell(%q) = false, want true", cmd)
+		}
+	}
+}
+
 func TestExecuteCommandUsesProjectDirectory(t *testing.T) {
 	projectDir := t.TempDir()
 	marker := "proton-command-cwd-test"

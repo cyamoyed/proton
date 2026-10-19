@@ -42,8 +42,15 @@ func executeCommand(command, dir string, shouldClear bool) int {
 	var cmd *exec.Cmd
 
 	if runtime.GOOS == "windows" {
-		// Use PowerShell on Windows for better compatibility
-		cmd = exec.Command("powershell.exe", "-NoProfile", "-Command", command)
+		if needsPowerShell(command) {
+			// PowerShell-specific syntax detected; bypass execution policy
+			// so scripts like npm.ps1 are not blocked.
+			cmd = exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command)
+		} else {
+			// Default to cmd.exe — avoids PowerShell execution-policy blocks
+			// on tools that ship .ps1 shims (npm, yarn, pnpm, etc.).
+			cmd = exec.Command("cmd.exe", "/c", command)
+		}
 	} else {
 		// Use login shell on Unix to load .bashrc/.zshrc
 		// "-l" (login) loads shell initialization files
@@ -103,6 +110,36 @@ func clearScreen() {
 	cmd.Stderr = os.Stderr
 	// Ignore error - clear screen is best effort
 	_ = cmd.Run()
+}
+
+// needsPowerShell reports whether command contains syntax that requires
+// PowerShell rather than cmd.exe. It looks for common PS-specific patterns:
+// cmdlet names (Verb-Noun), PS variables ($), special operators, and
+// pipeline assignments. Simple commands like "npm run build" return false.
+func needsPowerShell(command string) bool {
+	lower := strings.ToLower(strings.TrimSpace(command))
+	// PowerShell cmdlet pattern: "Verb-Noun" (e.g. Get-Content, Set-Location)
+	if strings.ContainsAny(lower, "$") {
+		return true
+	}
+	// Common PS-only operators and syntax
+	psPatterns := []string{
+		"get-", "set-", "new-", "remove-", "invoke-", "write-", "read-",
+		"start-", "stop-", "add-", "clear-", "copy-", "move-", "rename-",
+		"select-", "where-", "foreach-", "sort-", "measure-", "compare-",
+		"export-", "import-", "convertto-", "convertfrom-", "out-",
+		"-and ", "-or ", "-not ", "-eq ", "-ne ", "-gt ", "-lt ", "-ge ", "-le ",
+		"-match ", "-like ", "-contains ", "-replace ",
+		"| where", "| select", "| foreach", "| sort",
+		"@(", "$(", "$_", "$psitem",
+		"powershell", "pwsh",
+	}
+	for _, p := range psPatterns {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // mergeEnv merges .env variables into the existing environment.
