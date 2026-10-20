@@ -28,6 +28,7 @@ func RestoreTerminalState() {
 		return
 	}
 	fd := int(os.Stdin.Fd())
-	unix.IoctlSetTermios(fd, unix.TIOCSETA, originalTermios)
+	// Restore is best-effort; nothing sensible to do if the ioctl fails.
+	_ = unix.IoctlSetTermios(fd, unix.TIOCSETA, originalTermios)
 	saved = false
 }

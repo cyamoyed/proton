@@ -9,11 +9,16 @@ import (
 	"github.com/cyamoyed/proton/internal/plugin"
 )
 
+func writeFile(tb testing.TB, path, contents string) {
+	tb.Helper()
+	if err := os.WriteFile(path, []byte(contents), 0644); err != nil {
+		tb.Fatal(err)
+	}
+}
+
 func TestIntegrationPythonProject(t *testing.T) {
 	tmpDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(tmpDir, "requirements.txt"), []byte("flask"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	writeFile(t, filepath.Join(tmpDir, "requirements.txt"), "flask")
 
 	plugins, _ := plugin.LoadPlugins(nil)
 	detected := detector.DetectProject(tmpDir, plugins)
@@ -36,7 +41,7 @@ func TestIntegrationPythonProject(t *testing.T) {
 
 func TestIntegrationNodeProject(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{"name": "test"}`), 0644)
+	writeFile(t, filepath.Join(tmpDir, "package.json"), `{"name": "test"}`)
 
 	plugins, _ := plugin.LoadPlugins(nil)
 	detected := detector.DetectProject(tmpDir, plugins)
@@ -59,7 +64,7 @@ func TestIntegrationNodeProject(t *testing.T) {
 
 func TestIntegrationGoProject(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module test"), 0644)
+	writeFile(t, filepath.Join(tmpDir, "go.mod"), "module test")
 
 	plugins, _ := plugin.LoadPlugins(nil)
 	detected := detector.DetectProject(tmpDir, plugins)
@@ -82,7 +87,7 @@ func TestIntegrationGoProject(t *testing.T) {
 
 func TestIntegrationRustProject(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "Cargo.toml"), []byte("[package]\nname = \"test\""), 0644)
+	writeFile(t, filepath.Join(tmpDir, "Cargo.toml"), "[package]\nname = \"test\"")
 
 	plugins, _ := plugin.LoadPlugins(nil)
 	detected := detector.DetectProject(tmpDir, plugins)
@@ -105,7 +110,7 @@ func TestIntegrationRustProject(t *testing.T) {
 
 func TestIntegrationJavaProject(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "pom.xml"), []byte("<project></project>"), 0644)
+	writeFile(t, filepath.Join(tmpDir, "pom.xml"), "<project></project>")
 
 	plugins, _ := plugin.LoadPlugins(nil)
 	detected := detector.DetectProject(tmpDir, plugins)
@@ -128,7 +133,7 @@ func TestIntegrationJavaProject(t *testing.T) {
 
 func TestIntegrationCppProject(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "CMakeLists.txt"), []byte("cmake_minimum_required(VERSION 3.0)"), 0644)
+	writeFile(t, filepath.Join(tmpDir, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.0)")
 
 	plugins, _ := plugin.LoadPlugins(nil)
 	detected := detector.DetectProject(tmpDir, plugins)
@@ -155,12 +160,8 @@ func TestIntegrationSwiftUIIOSProject(t *testing.T) {
 	if err := os.Mkdir(project, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "project.pbxproj"), []byte("SDKROOT = iphoneos;\ncom.apple.product-type.application"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "ExampleApp.swift"), []byte("import SwiftUI\n@main struct ExampleApp: App {}"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	writeFile(t, filepath.Join(project, "project.pbxproj"), "SDKROOT = iphoneos;\ncom.apple.product-type.application")
+	writeFile(t, filepath.Join(tmpDir, "ExampleApp.swift"), "import SwiftUI\n@main struct ExampleApp: App {}")
 
 	plugins, err := plugin.LoadPlugins(nil)
 	if err != nil {
@@ -181,12 +182,8 @@ func TestIntegrationUIKitProjectIsNotSwiftUI(t *testing.T) {
 	if err := os.Mkdir(project, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(project, "project.pbxproj"), []byte("IPHONEOS_DEPLOYMENT_TARGET = 18.0;"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "AppDelegate.swift"), []byte("import UIKit"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	writeFile(t, filepath.Join(project, "project.pbxproj"), "IPHONEOS_DEPLOYMENT_TARGET = 18.0;")
+	writeFile(t, filepath.Join(tmpDir, "AppDelegate.swift"), "import UIKit")
 
 	plugins, err := plugin.LoadPlugins(nil)
 	if err != nil {
@@ -201,9 +198,9 @@ func TestIntegrationUIKitProjectIsNotSwiftUI(t *testing.T) {
 
 func TestIntegrationMixedProject(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(`{}`), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "requirements.txt"), []byte(""), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module test"), 0644)
+	writeFile(t, filepath.Join(tmpDir, "package.json"), `{}`)
+	writeFile(t, filepath.Join(tmpDir, "requirements.txt"), "")
+	writeFile(t, filepath.Join(tmpDir, "go.mod"), "module test")
 
 	plugins, _ := plugin.LoadPlugins(nil)
 	detected := detector.DetectProject(tmpDir, plugins)

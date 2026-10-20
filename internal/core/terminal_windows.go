@@ -25,6 +25,7 @@ func RestoreTerminalState() {
 		return
 	}
 	handle := windows.Handle(os.Stdin.Fd())
-	windows.SetConsoleMode(handle, originalMode)
+	// Restore is best-effort; nothing sensible to do if the call fails.
+	_ = windows.SetConsoleMode(handle, originalMode)
 	saved = false
 }
