@@ -11,7 +11,9 @@ import (
 
 func TestIntegrationPythonProject(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "requirements.txt"), []byte("flask"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "requirements.txt"), []byte("flask"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	plugins, _ := plugin.LoadPlugins(nil)
 	detected := detector.DetectProject(tmpDir, plugins)

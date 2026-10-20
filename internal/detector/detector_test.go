@@ -40,8 +40,12 @@ func TestDetectProject(t *testing.T) {
 
 func TestDetectMultipleProjects(t *testing.T) {
 	tmpDir := t.TempDir()
-	os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "requirements.txt"), []byte(""), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "requirements.txt"), []byte(""), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	plugins := []*plugin.Plugin{
 		{Name: "nodejs", Detect: plugin.Detect{Files: []string{"package.json"}}},
