@@ -28,7 +28,35 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          body: |
+            ## 安装
+
+            ### macOS / Linux（推荐）
+            在终端执行一行命令完成安装：
+
+            ```bash
+            curl -fsSL https://github.com/cyamoyed/proton/releases/latest/download/install.sh | bash
+            ```
+
+            或者下载下方的附件后安装（仓库私有、无法在线下载时）：
+
+            ```bash
+            sh install.sh ~/Downloads/proton-darwin-arm64   # Apple Silicon；Intel Mac 将 arm64 换成 amd64
+            ```
+
+            安装到 `~/.local/bin/proton` 并自动配置 PATH，完成后重新打开终端运行 `proton --version` 验证。
+
+            > 注意：macOS / Linux 的 `proton-*` 附件都是命令行程序，请在终端中按上述方式运行，不要在访达/文件管理器中双击。
+
+            ### Windows
+            双击运行 `proton-installer-windows-amd64.exe`（ARM 设备选择 arm64 版本），然后重新打开终端运行 `proton --version`。
+
+            ### 卸载
+            ```bash
+            proton uninstall
+            ```
           files: |
+            scripts/install.sh
             build/proton-linux-amd64
             build/proton-linux-arm64
             build/proton-darwin-amd64

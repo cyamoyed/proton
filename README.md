@@ -40,7 +40,11 @@ Proton 因此而诞生：通过识别项目结构和运行环境，将常用开�
 
 ## 快速开始
 
-下载并运行对应平台的[最新安装程序](https://github.com/cyamoyed/proton/releases/latest)，然后重新打开终端：
+macOS / Linux 在终端执行一行命令即可安装（Windows 见 [安装](#安装)），然后重新打开终端：
+
+```bash
+curl -fsSL https://github.com/cyamoyed/proton/releases/latest/download/install.sh | bash
+```
 
 ```bash
 cd /path/to/project
@@ -50,6 +54,8 @@ proton
 Proton 会自动检测项目、检查必需工具并列出可执行命令。使用方向键选择命令，按 `Enter` 执行。
 
 ## 安装
+
+> 注意：macOS / Linux 的 `proton-*` 发布附件都是命令行程序，不能在访达 / 文件管理器中双击运行（会提示"文本编码不适用"），请按下述方式在终端中执行。
 
 ### Windows
 
@@ -68,25 +74,39 @@ Proton 会安装到 `%LOCALAPPDATA%\Proton\bin\proton.exe`，并自动将该目�
 
 ### macOS
 
-从 [最新版本](https://github.com/cyamoyed/proton/releases/latest) 下载对应的 `proton-installer-darwin-*` 文件，然后执行：
+在终端执行一行命令，安装脚本会自动识别芯片类型（Apple Silicon / Intel）：
 
 ```bash
-chmod +x ~/Downloads/proton-installer-darwin-arm64
-~/Downloads/proton-installer-darwin-arm64
+curl -fsSL https://github.com/cyamoyed/proton/releases/latest/download/install.sh | bash
 ```
 
-Intel Mac 使用 `amd64`，Apple Silicon 使用 `arm64`。
+如果仓库私有或无法在线下载，从 [最新版本](https://github.com/cyamoyed/proton/releases/latest)（或 GitHub Actions 构建产物）下载 `install.sh` 和对应的 `proton-darwin-*` 附件，然后在终端执行：
+
+```bash
+sh install.sh ~/Downloads/proton-darwin-arm64   # Apple Silicon；Intel Mac 使用 amd64
+```
+
+`install.sh` 也可以不带参数运行：它会自动在脚本所在目录寻找与本机平台匹配的 `proton-darwin-*` 二进制，找不到时再从 GitHub Release 下载。安装完成后重新打开终端并验证：
+
+```bash
+proton --version
+```
 
 ### Linux
 
-从 [最新版本](https://github.com/cyamoyed/proton/releases/latest) 下载对应的 `proton-installer-linux-*` 文件，然后执行：
+安装方式与 macOS 相同：
 
 ```bash
-chmod +x ~/Downloads/proton-installer-linux-amd64
-~/Downloads/proton-installer-linux-amd64
+curl -fsSL https://github.com/cyamoyed/proton/releases/latest/download/install.sh | bash
 ```
 
-在 macOS 和 Linux 上，Proton 会安装到 `~/.local/bin/proton`。如果 PATH 中没有该目录，安装程序会更新当前 Shell 对应的配置文件。安装完成后请重新打开终端。
+或下载 `install.sh` 与对应的 `proton-linux-*` 附件后执行：
+
+```bash
+sh install.sh ~/Downloads/proton-linux-amd64   # ARM 设备使用 arm64
+```
+
+在 macOS 和 Linux 上，Proton 会安装到 `~/.local/bin/proton`。如果 PATH 中没有该目录，安装脚本会更新当前 Shell 对应的配置文件。安装完成后请重新打开终端。
 
 ### 卸载
 

@@ -40,7 +40,11 @@ Proton was created for this purpose. It identifies project structures and runtim
 
 ## Quick start
 
-Download and run the appropriate installer from the [latest release](https://github.com/cyamoyed/proton/releases/latest), then open a new terminal:
+On macOS / Linux, install with a single command (for Windows see [Installation](#installation)), then open a new terminal:
+
+```bash
+curl -fsSL https://github.com/cyamoyed/proton/releases/latest/download/install.sh | bash
+```
 
 ```bash
 cd /path/to/project
@@ -50,6 +54,8 @@ proton
 Proton detects the project, checks required tools, and lists available commands. Use the arrow keys to select a command and press `Enter` to run it.
 
 ## Installation
+
+> Note: on macOS / Linux the `proton-*` release assets are command-line programs. Do not double-click them in Finder / your file manager (it will report an invalid text encoding); run them in a terminal as shown below.
 
 ### Windows
 
@@ -68,25 +74,39 @@ When launched by double-clicking, the installer keeps the result visible until y
 
 ### macOS
 
-Download the matching `proton-installer-darwin-*` file from the [latest release](https://github.com/cyamoyed/proton/releases/latest), then run:
+Run one command in a terminal; the install script detects the chip automatically (Apple Silicon or Intel):
 
 ```bash
-chmod +x ~/Downloads/proton-installer-darwin-arm64
-~/Downloads/proton-installer-darwin-arm64
+curl -fsSL https://github.com/cyamoyed/proton/releases/latest/download/install.sh | bash
 ```
 
-Use `amd64` for Intel Macs and `arm64` for Apple Silicon.
+If the repository is private or downloads are unavailable, get `install.sh` and the matching `proton-darwin-*` asset from the [latest release](https://github.com/cyamoyed/proton/releases/latest) (or a GitHub Actions build artifact), then run:
+
+```bash
+sh install.sh ~/Downloads/proton-darwin-arm64   # Apple Silicon; use amd64 on Intel Macs
+```
+
+`install.sh` also works without arguments: it first looks for a platform-matching `proton-darwin-*` binary next to itself, and only downloads from the GitHub Release when none is found. Open a new terminal afterwards and verify:
+
+```bash
+proton --version
+```
 
 ### Linux
 
-Download the matching `proton-installer-linux-*` file from the [latest release](https://github.com/cyamoyed/proton/releases/latest), then run:
+Same as macOS:
 
 ```bash
-chmod +x ~/Downloads/proton-installer-linux-amd64
-~/Downloads/proton-installer-linux-amd64
+curl -fsSL https://github.com/cyamoyed/proton/releases/latest/download/install.sh | bash
 ```
 
-On macOS and Linux, Proton installs to `~/.local/bin/proton`. If necessary, the installer adds that directory to the active shell profile. Open a new terminal after installation.
+or download `install.sh` plus the matching `proton-linux-*` asset and run:
+
+```bash
+sh install.sh ~/Downloads/proton-linux-amd64   # use arm64 on ARM devices
+```
+
+On macOS and Linux, Proton installs to `~/.local/bin/proton`. If that directory is not in PATH, the install script adds it to the active shell profile. Open a new terminal after installation.
 
 ### Uninstall
 
