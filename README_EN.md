@@ -16,6 +16,7 @@ Proton detects project types, existing tasks, and runtime environments, then exp
 - [Installation](#installation)
 - [Building from source](#building-from-source)
 - [Usage](#usage)
+- [MCP integration](#mcp-integration)
 - [Supported project types](#supported-project-types)
 - [Configuration](#configuration)
 - [Roadmap](ROADMAP.md)
@@ -36,6 +37,7 @@ Proton was created for this purpose. It identifies project structures and runtim
 - **Environment checks**: Verify required tools before running commands
 - **Plugin system**: Add custom project types through YAML plugins
 - **Automation interface**: List tasks as text or JSON and run them non-interactively by stable task ID
+- **MCP server**: `proton mcp` starts a stdio MCP server so AI agents can discover and run tasks directly
 - **Cross-platform**: Supports Windows, macOS, and Linux
 
 ## Quick start
@@ -205,6 +207,7 @@ go vet ./...
 proton [options] [directory]
 proton list [options] [directory]
 proton run [options] <task-id> [directory]
+proton mcp
 proton install
 proton uninstall
 
@@ -228,6 +231,31 @@ proton run root:运行测试 /path/to/project
 ```
 
 `proton list` shows each task's ID, shell command, and source. Add `--json` for a machine-readable catalog with a `schema_version`, suitable for scripts and AI agents. `proton run` requires an exact task ID. Tasks marked high-risk or requiring confirmation also require `--yes` for non-interactive execution.
+
+## MCP integration
+
+`proton mcp` starts a Model Context Protocol server over stdio, so MCP-capable clients such as Claude Desktop, Cursor, or Codex can use Proton without parsing CLI output. Add it to any MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "proton": {
+      "command": "proton",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+The server exposes three tools:
+
+| Tool | Description |
+|------|-------------|
+| `list_tasks` | Returns the same task catalog as `proton list --json`, with stable task IDs, commands, risk levels, and required tools |
+| `run_task` | Runs a task by its exact ID; `dry_run` reviews the command first, `approved` approves high-risk tasks, and `timeout_seconds` bounds execution (default 120s, clamped to 1-600; the whole process tree is killed at the timeout and captured output is still returned) |
+| `check_env` | Checks whether the tools required by discovered tasks are installed, with detected versions |
+
+Tasks marked high-risk or `confirm: true` require an explicit `approved: true`, mirroring the CLI `--yes` gate. Commands run through the system shell in the task's project directory with the project's `.env` loaded; combined stdout/stderr is returned with the result (capped at 1 MiB, truncated beyond that).
 
 ## Supported project types
 

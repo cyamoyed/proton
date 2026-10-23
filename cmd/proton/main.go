@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/cyamoyed/proton/internal/core"
-	"github.com/cyamoyed/proton/internal/envcheck"
 	"github.com/cyamoyed/proton/internal/installer"
+	"github.com/cyamoyed/proton/internal/mcpserver"
 	"github.com/cyamoyed/proton/internal/tui"
 	"github.com/mattn/go-runewidth"
 )
@@ -69,9 +69,31 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 			return runList(args[1:], stdout, stderr)
 		case "run":
 			return runTask(args[1:], stdout, stderr)
+		case "mcp":
+			return runMCP(args[1:], stderr)
 		}
 	}
 	return runInteractive(args, stdout, stderr)
+}
+
+// runMCP 启动面向 AI Agent 的 stdio MCP server。JSON-RPC 固定使用真实的
+// 进程标准流，与 dispatch 传入的 writer 无关。
+func runMCP(args []string, stderr io.Writer) error {
+	flags := flag.NewFlagSet("proton mcp", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() {
+		fmt.Fprintln(stderr, "Usage: proton mcp")
+		fmt.Fprintln(stderr, "\nStarts a Model Context Protocol server on stdio for AI agents.")
+		fmt.Fprintln(stderr, "Tools: list_tasks, run_task, check_env. See the README for client configuration.")
+	}
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() > 0 {
+		flags.Usage()
+		return fmt.Errorf("expected no arguments")
+	}
+	return mcpserver.Serve(os.Stdin, os.Stdout, stderr, version)
 }
 
 func runInteractive(args []string, stdout, stderr io.Writer) error {
@@ -82,7 +104,7 @@ func runInteractive(args []string, stdout, stderr io.Writer) error {
 	noRecursive := flags.Bool("no-recursive", false, "scan only the target directory")
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Proton discovers project tasks and runs them interactively or from automation.")
-		fmt.Fprintln(stderr, "\nUsage:\n  proton [options] [directory]\n  proton list [options] [directory]\n  proton run [options] <task-id> [directory]\n  proton install\n  proton uninstall\n\nOptions:")
+		fmt.Fprintln(stderr, "\nUsage:\n  proton [options] [directory]\n  proton list [options] [directory]\n  proton run [options] <task-id> [directory]\n  proton mcp\n  proton install\n  proton uninstall\n\nOptions:")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -195,10 +217,10 @@ func runTask(args []string, stdout, stderr io.Writer) error {
 	if *dryRun {
 		return nil
 	}
-	if (task.Confirm || strings.EqualFold(task.Risk, "high")) && !*yes {
+	if core.TaskNeedsApproval(task) && !*yes {
 		return fmt.Errorf("task %q requires confirmation; review it with --dry-run and execute with --yes", task.ID)
 	}
-	if missing := missingRequiredTools(task); len(missing) > 0 {
+	if missing := core.MissingRequiredTools(task); len(missing) > 0 {
 		return fmt.Errorf("missing required tools: %s", strings.Join(missing, ", "))
 	}
 	if exitCode := tui.ExecuteCommandDirect(task.Command, task.ProjectDir); exitCode != 0 {
@@ -390,16 +412,6 @@ func riskSuffix(risk string) string {
 func riskLabel(risk string) string {
 	label := strings.TrimPrefix(strings.TrimSpace(riskSuffix(risk)), "[")
 	return strings.TrimSuffix(label, "]")
-}
-
-func missingRequiredTools(task core.Task) []string {
-	var missing []string
-	for _, status := range envcheck.CheckEnvironment(task.Checks) {
-		if status.Required && !status.OK {
-			missing = append(missing, status.Name)
-		}
-	}
-	return missing
 }
 
 func shouldInstall() bool {

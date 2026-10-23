@@ -9,6 +9,17 @@ description: Use this skill when an AI coding agent needs to start, inspect, tes
 
 Proton discovers runnable tasks in local repositories and polyglot monorepos. Use it as the first command-discovery layer before guessing how to start, test, build, or lint an unfamiliar project.
 
+## Prefer MCP When Available
+
+If an MCP client connects a `proton` server (command `proton`, args `["mcp"]`), use its tools instead of the CLI — they return structured results without text parsing:
+
+1. `list_tasks` — the full task catalog with stable IDs (same schema as `proton list --json`).
+2. `run_task` with `dry_run: true` — review the command, directory, risk, and required tools.
+3. `run_task` — execute; pass `approved: true` only for high-risk/confirm tasks after the user explicitly agrees, and `timeout_seconds` (default 120) to bound long-running commands. Long-running dev servers are killed at the timeout with their captured output returned.
+4. `check_env` — verify required tools before running.
+
+Everything below applies when no MCP server is available.
+
 ## Find Proton
 
 Prefer the installed executable:
@@ -94,7 +105,7 @@ For a human-operated terminal UI:
 proton .
 ```
 
-Use interactive mode when the user wants to choose a command manually. For autonomous agent workflows, prefer `proton list --json` plus `proton run --dry-run`.
+Use interactive mode when the user wants to choose a command manually. For autonomous agent workflows, prefer the MCP tools, or `proton list --json` plus `proton run --dry-run` without MCP.
 
 ## Recommended Agent Workflow
 

@@ -16,6 +16,7 @@ Proton 自动识别项目类型、现有任务和运行环境，并通过交互�
 - [安装](#安装)
 - [从源码构建](#从源码构建)
 - [使用方法](#使用方法)
+- [MCP 集成](#mcp-集成)
 - [支持的项目类型](#支持的项目类型)
 - [配置](#配置)
 - [开发路线图](ROADMAP.md)
@@ -36,6 +37,7 @@ Proton 因此而诞生：通过识别项目结构和运行环境，将常用开�
 - **环境检查**：执行命令前检查必需的开发工具是否已经安装
 - **插件系统**：通过 YAML 插件扩展并添加自定义项目类型
 - **自动化接口**：以文本或 JSON 列出任务，并通过稳定任务 ID 非交互执行
+- **MCP 服务器**：`proton mcp` 启动 stdio MCP server，AI Agent 可直接发现和执行任务
 - **跨平台**：支持 Windows、macOS 和 Linux
 
 ## 快速开始
@@ -205,6 +207,7 @@ go vet ./...
 proton [选项] [目录]
 proton list [选项] [目录]
 proton run [选项] <任务 ID> [目录]
+proton mcp
 proton install
 proton uninstall
 
@@ -228,6 +231,31 @@ proton run root:运行测试 /path/to/project
 ```
 
 `proton list` 按项目分组、一行一条地显示任务：启动命令排在最前并标记 `▶`，每个任务一行（名称 + Shell 命令）。任务 ID 由组头的「ID 前缀」加行尾 `(ID: ...)` 拼接而成（行尾仅在短 ID 与任务名不同时显示），例如 `proton run jeecg-server-cloud/jeecg-visual/jeecg-cloud-xxljob:运行-spring-cloud-服务`。列表只包含含启动类（应用启动入口）的模块——公共库、聚合根等无启动入口的模块自动隐藏（若扫描范围内没有任何可启动模块，则列出全部）。`--json` 始终输出完整目录，带有 `schema_version`，适合脚本和 AI Agent 使用。`proton run` 只接受完整任务 ID。对于标记为高风险或需要确认的任务，非交互执行还必须传入 `--yes`。
+
+## MCP 集成
+
+`proton mcp` 启动一个基于 stdio 的 MCP（Model Context Protocol）服务器，让 Claude Desktop、Cursor、Codex 等 AI Agent 无需解析 CLI 输出即可使用 Proton。在支持 MCP 的客户端中加入：
+
+```json
+{
+  "mcpServers": {
+    "proton": {
+      "command": "proton",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+服务器提供三个工具：
+
+| 工具 | 说明 |
+|------|------|
+| `list_tasks` | 返回与 `proton list --json` 相同的任务目录，含稳定任务 ID、命令、风险等级和必需工具 |
+| `run_task` | 按精确任务 ID 执行；`dry_run` 先审查命令，`approved` 批准高风险任务，`timeout_seconds` 控制超时（默认 120 秒，范围 1-600，超时终止整个进程树并返回已捕获输出） |
+| `check_env` | 检查已发现任务的必需工具是否安装，附检测到的版本 |
+
+高风险或标记 `confirm: true` 的任务必须显式传入 `approved: true` 才能执行，与 CLI 的 `--yes` 门禁一致。命令在任务所属目录下通过系统 Shell 执行并自动加载项目 `.env`，合并的 stdout/stderr 随结果返回（上限 1 MiB，超出截断）。
 
 ## 支持的项目类型
 

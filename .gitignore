@@ -31,5 +31,8 @@ Thumbs.db
 # MiMoCode
 .mimocode/
 
+# ZCode
+.zcode/
+
 # Compose docs (development artifacts)
 docs/compose/

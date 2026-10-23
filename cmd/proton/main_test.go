@@ -29,6 +29,16 @@ func TestShouldInstall(t *testing.T) {
 	}
 }
 
+func TestRunMCPRejectsUnknownFlagsAndArguments(t *testing.T) {
+	var stderr bytes.Buffer
+	if err := runMCP([]string{"--bogus"}, &stderr); err == nil {
+		t.Error("unknown flag should fail fast without starting the server")
+	}
+	if err := runMCP([]string{"extra"}, &stderr); err == nil {
+		t.Error("positional argument should fail fast without starting the server")
+	}
+}
+
 func TestRunListJSON(t *testing.T) {
 	isolateHome(t)
 	dir := t.TempDir()
