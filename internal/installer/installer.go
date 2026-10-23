@@ -83,7 +83,7 @@ func copyExecutable(source, target string) error {
 	if err != nil {
 		return fmt.Errorf("opening installer %s: %w", source, err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	temporary := target + ".new"
 	out, err := os.OpenFile(temporary, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 	if err != nil {

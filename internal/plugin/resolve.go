@@ -122,9 +122,10 @@ func resolveMaven(p *Plugin, dir, goos string) {
 	commands := []Command{{Name: "清理", Run: prefix + " clean", Description: "清理 Maven 构建产物"}}
 	if packaging == "pom" && len(project.Modules) > 0 {
 		buildName, testName, verifyName, installName := "构建全部模块", "测试全部模块", "验证全部模块", "本地安装全部模块"
-		if p.Name == "spring-boot-maven" {
+		switch p.Name {
+		case "spring-boot-maven":
 			buildName, testName, verifyName, installName = "构建 Spring Boot 模块", "测试 Spring Boot 模块", "验证 Spring Boot 模块", "本地安装 Spring Boot 模块"
-		} else if p.Name == "spring-cloud-maven" {
+		case "spring-cloud-maven":
 			buildName, testName, verifyName, installName = "构建 Spring Cloud 模块", "测试 Spring Cloud 模块", "验证 Spring Cloud 模块", "本地安装 Spring Cloud 模块"
 		}
 		commands = append(commands,
@@ -574,7 +575,7 @@ func resolveJust(p *Plugin, dir string) {
 	if err != nil {
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var commands []Command
 	description := ""

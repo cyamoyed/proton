@@ -40,7 +40,7 @@ func updateWindowsPath(dir string, add bool) error {
 	if err != nil {
 		return fmt.Errorf("opening user environment settings: %w", err)
 	}
-	defer key.Close()
+	defer func() { _ = key.Close() }()
 	current, _, err := key.GetStringValue("Path")
 	if err != nil && err != registry.ErrNotExist {
 		return fmt.Errorf("reading user PATH: %w", err)

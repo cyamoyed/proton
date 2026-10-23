@@ -124,5 +124,5 @@ func (e *Engine) Discover(options Options) (Discovery, error) {
 }
 
 func println(s string) {
-	os.Stdout.WriteString(s + "\n")
+	_, _ = os.Stdout.WriteString(s + "\n")
 }

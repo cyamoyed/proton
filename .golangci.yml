@@ -1,0 +1,14 @@
+version: "2"
+
+# golangci-lint v2 不再像 v1 那样默认忽略 fmt 打印族的返回值；
+# 这里恢复该豁免——打印到 stdout/stderr 的写入错误没有可采取的动作。
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Print
+        - fmt.Printf
+        - fmt.Println
