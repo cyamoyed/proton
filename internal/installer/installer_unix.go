@@ -45,7 +45,7 @@ func addToUserPath(dir string) error {
 	if err != nil {
 		return fmt.Errorf("opening shell profile %s: %w", rc, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := fmt.Fprintf(f, "\n# Proton CLI\n%s\n", line); err != nil {
 		return fmt.Errorf("updating shell profile %s: %w", rc, err)
 	}
