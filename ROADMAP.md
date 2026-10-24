@@ -23,6 +23,7 @@ The TUI is one client of the task catalog. The catalog and non-interactive CLI a
 
 - [x] Expose the task catalog and execution over an MCP server (`proton mcp`, stdio) with the same high-risk approval gate as the CLI.
 - [x] Produce SHA-256 checksums for every release artifact.
+- [x] Self-update from GitHub Releases (`proton update`) with SHA-256 verification, atomic replacement, and private-repo token support.
 - [x] Build release binaries without CGO and with trimmed filesystem paths.
 - [x] Verify modules and scan reachable vulnerabilities in CI.
 - [ ] Sign and notarize macOS artifacts.

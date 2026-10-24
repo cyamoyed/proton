@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -14,6 +15,7 @@ import (
 	"github.com/cyamoyed/proton/internal/installer"
 	"github.com/cyamoyed/proton/internal/mcpserver"
 	"github.com/cyamoyed/proton/internal/tui"
+	"github.com/cyamoyed/proton/internal/updater"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -71,6 +73,8 @@ func dispatch(args []string, stdout, stderr io.Writer) error {
 			return runTask(args[1:], stdout, stderr)
 		case "mcp":
 			return runMCP(args[1:], stderr)
+		case "update":
+			return runUpdate(args[1:], stdout, stderr, version)
 		}
 	}
 	return runInteractive(args, stdout, stderr)
@@ -96,6 +100,85 @@ func runMCP(args []string, stderr io.Writer) error {
 	return mcpserver.Serve(os.Stdin, os.Stdout, stderr, version)
 }
 
+// runUpdate 检查 GitHub Releases 上的最新版本并自更新当前二进制。
+func runUpdate(args []string, stdout, stderr io.Writer, currentVersion string) error {
+	flags := flag.NewFlagSet("proton update", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	checkOnly := flags.Bool("check", false, "only check for a newer version without installing it")
+	force := flags.Bool("force", false, "install the latest version even when the current version cannot be determined")
+	flags.Usage = func() {
+		fmt.Fprintln(stderr, "Usage: proton update")
+		fmt.Fprintln(stderr, "\nChecks GitHub Releases for a newer Proton version and replaces this executable.")
+		fmt.Fprintln(stderr, "For private repositories set PROTON_GITHUB_TOKEN (or GITHUB_TOKEN).")
+		fmt.Fprintln(stderr, "\nOptions:")
+		flags.PrintDefaults()
+	}
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() > 0 {
+		flags.Usage()
+		return fmt.Errorf("expected no arguments")
+	}
+
+	repo := os.Getenv("PROTON_REPO")
+	if repo == "" {
+		repo = "cyamoyed/proton"
+	}
+	opts := updater.Options{
+		Repo:     repo,
+		Token:    githubToken(),
+		BaseURL:  os.Getenv("PROTON_GITHUB_API"),
+		Progress: func(message string) { fmt.Fprintln(stdout, "  "+message) },
+	}
+
+	fmt.Fprintln(stdout, "正在检查更新...")
+	result, err := updater.Check(context.Background(), opts, currentVersion)
+	if err != nil {
+		return err
+	}
+	latest := result.Latest()
+
+	switch result.State {
+	case updater.UpToDate:
+		fmt.Fprintf(stdout, "已是最新版本 (当前 %s, 最新发布 %s)。\n", currentVersion, latest)
+		return nil
+	case updater.CurrentNewer:
+		fmt.Fprintf(stdout, "当前版本 %s 已比最新发布 %s 更新。\n", currentVersion, latest)
+		return nil
+	case updater.UnknownCurrent:
+		if !*force {
+			fmt.Fprintf(stdout, "当前版本号 %q 无法识别 (可能是开发构建), 最新发布为 %s。\n", currentVersion, latest)
+			fmt.Fprintln(stdout, "确认要覆盖当前二进制时, 执行: proton update --force")
+			return nil
+		}
+		fmt.Fprintf(stdout, "当前版本号无法识别, 按要求强制更新到 %s。\n", latest)
+	default:
+		fmt.Fprintf(stdout, "发现新版本: %s (当前 %s)\n", latest, currentVersion)
+	}
+	if *checkOnly {
+		return nil
+	}
+
+	target, err := updater.Apply(context.Background(), opts, result.Release)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "更新完成: %s\n", target)
+	fmt.Fprintln(stdout, "运行 proton --version 验证版本。")
+	return nil
+}
+
+// githubToken 依次读取 PROTON_GITHUB_TOKEN / GITHUB_TOKEN / GH_TOKEN。
+func githubToken() string {
+	for _, name := range []string{"PROTON_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"} {
+		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func runInteractive(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("proton", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -104,7 +187,7 @@ func runInteractive(args []string, stdout, stderr io.Writer) error {
 	noRecursive := flags.Bool("no-recursive", false, "scan only the target directory")
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Proton discovers project tasks and runs them interactively or from automation.")
-		fmt.Fprintln(stderr, "\nUsage:\n  proton [options] [directory]\n  proton list [options] [directory]\n  proton run [options] <task-id> [directory]\n  proton mcp\n  proton install\n  proton uninstall\n\nOptions:")
+		fmt.Fprintln(stderr, "\nUsage:\n  proton [options] [directory]\n  proton list [options] [directory]\n  proton run [options] <task-id> [directory]\n  proton mcp\n  proton install\n  proton update\n  proton uninstall\n\nOptions:")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {

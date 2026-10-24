@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -239,4 +242,77 @@ func isolateHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+}
+
+func TestRunUpdateCheckDetectsNewerRelease(t *testing.T) {
+	server := newUpdateTestServer(t, `{"tag_name":"v9.9.9","assets":[]}`, http.StatusOK)
+	t.Setenv("PROTON_GITHUB_API", server.URL)
+	t.Setenv("PROTON_REPO", "cyamoyed/proton")
+
+	var stdout, stderr bytes.Buffer
+	if err := runUpdate([]string{"--check"}, &stdout, &stderr, "v1.0.0"); err != nil {
+		t.Fatalf("runUpdate() error = %v, stderr = %s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "v9.9.9") || !strings.Contains(stdout.String(), "新版本") {
+		t.Errorf("output should report the newer release:\n%s", stdout.String())
+	}
+}
+
+func TestRunUpdateCheckUpToDate(t *testing.T) {
+	server := newUpdateTestServer(t, `{"tag_name":"v1.0.0","assets":[]}`, http.StatusOK)
+	t.Setenv("PROTON_GITHUB_API", server.URL)
+	t.Setenv("PROTON_REPO", "cyamoyed/proton")
+
+	var stdout, stderr bytes.Buffer
+	if err := runUpdate([]string{"--check"}, &stdout, &stderr, "v1.0.0"); err != nil {
+		t.Fatalf("runUpdate() error = %v, stderr = %s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "已是最新版本") {
+		t.Errorf("output should report up to date:\n%s", stdout.String())
+	}
+}
+
+func TestRunUpdateUnknownVersionRequiresForce(t *testing.T) {
+	server := newUpdateTestServer(t, `{"tag_name":"v9.9.9","assets":[]}`, http.StatusOK)
+	t.Setenv("PROTON_GITHUB_API", server.URL)
+	t.Setenv("PROTON_REPO", "cyamoyed/proton")
+
+	var stdout, stderr bytes.Buffer
+	if err := runUpdate([]string{"--check"}, &stdout, &stderr, "dev"); err != nil {
+		t.Fatalf("runUpdate() error = %v, stderr = %s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "--force") {
+		t.Errorf("output should point at --force:\n%s", stdout.String())
+	}
+}
+
+func TestRunUpdatePrivateRepoHint(t *testing.T) {
+	server := newUpdateTestServer(t, `{}`, http.StatusNotFound)
+	t.Setenv("PROTON_GITHUB_API", server.URL)
+	t.Setenv("PROTON_REPO", "cyamoyed/proton")
+
+	var stdout, stderr bytes.Buffer
+	err := runUpdate([]string{"--check"}, &stdout, &stderr, "v1.0.0")
+	if err == nil || !strings.Contains(err.Error(), "令牌") {
+		t.Fatalf("runUpdate() error = %v; want a hint about the access token", err)
+	}
+}
+
+func TestRunUpdateRejectsArguments(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := runUpdate([]string{"extra"}, &stdout, &stderr, "v1.0.0"); err == nil {
+		t.Error("positional argument should fail fast")
+	}
+}
+
+func newUpdateTestServer(t *testing.T, body string, status int) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/cyamoyed/proton/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		fmt.Fprint(w, body)
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	return server
 }

@@ -110,6 +110,23 @@ sh install.sh ~/Downloads/proton-linux-amd64   # use arm64 on ARM devices
 
 On macOS and Linux, Proton installs to `~/.local/bin/proton`. If that directory is not in PATH, the install script adds it to the active shell profile. Open a new terminal after installation.
 
+### Updating
+
+An installed Proton can update itself to the latest release:
+
+```bash
+proton update          # check for a newer release and install it
+proton update --check  # only check, do not install
+```
+
+The update downloads the asset matching your platform, verifies its SHA-256 checksum, and atomically replaces the installed binary (`~/.local/bin/proton` on macOS / Linux, `%LOCALAPPDATA%\Proton\bin\proton.exe` on Windows) — no need to rerun the install script. For private repositories or restricted downloads, set an access token with read permission first:
+
+```bash
+export PROTON_GITHUB_TOKEN=ghp_xxx   # GITHUB_TOKEN / GH_TOKEN also work
+```
+
+When online updates are not possible, download the asset manually as described above and rerun `install.sh`.
+
 ### Uninstall
 
 ```bash
@@ -209,6 +226,7 @@ proton list [options] [directory]
 proton run [options] <task-id> [directory]
 proton mcp
 proton install
+proton update
 proton uninstall
 
   -depth int

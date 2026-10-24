@@ -110,6 +110,23 @@ sh install.sh ~/Downloads/proton-linux-amd64   # ARM 设备使用 arm64
 
 在 macOS 和 Linux 上，Proton 会安装到 `~/.local/bin/proton`。如果 PATH 中没有该目录，安装脚本会更新当前 Shell 对应的配置文件。安装完成后请重新打开终端。
 
+### 更新
+
+已安装的 Proton 可以自更新到最新发布版本：
+
+```bash
+proton update          # 检查并更新到最新发布
+proton update --check  # 只检查是否有新版本，不安装
+```
+
+更新会下载与本机平台匹配的发布附件，校验 SHA-256 后原子替换已安装的二进制（macOS / Linux 的 `~/.local/bin/proton`，Windows 的 `%LOCALAPPDATA%\Proton\bin\proton.exe`），无需重新执行安装脚本。仓库私有或下载受限时，先设置具有读取权限的访问令牌：
+
+```bash
+export PROTON_GITHUB_TOKEN=ghp_xxx   # 也接受 GITHUB_TOKEN / GH_TOKEN
+```
+
+无法在线更新时，也可以按上文方式手动下载附件后重新执行 `install.sh`。
+
 ### 卸载
 
 ```bash
@@ -209,6 +226,7 @@ proton list [选项] [目录]
 proton run [选项] <任务 ID> [目录]
 proton mcp
 proton install
+proton update
 proton uninstall
 
   -depth int
