@@ -507,19 +507,33 @@ func resolveNode(p *Plugin, dir string) {
 
 func resolvePython(p *Plugin, dir string) {
 	interpreter := pythonInterpreter()
+	venv := venvPython(dir)
+	python := interpreter
+	if venv != "" {
+		python = venv
+	}
 	commands := make([]Command, 0, len(p.Commands))
-	if exists(dir, "requirements.txt") {
-		commands = append(commands, Command{Name: "安装依赖", Run: interpreter + " -m pip install -r requirements.txt"})
-	} else if exists(dir, "Pipfile") {
+	switch {
+	case exists(dir, "requirements.txt"):
+		commands = append(commands, Command{
+			Name:        "安装依赖",
+			Run:         pythonInstallRun(dir, "install -r requirements.txt"),
+			Description: installDescription(dir),
+		})
+	case exists(dir, "Pipfile"):
 		commands = append(commands, Command{Name: "安装依赖", Run: "pipenv install"})
-	} else if exists(dir, "pyproject.toml") {
-		commands = append(commands, Command{Name: "安装项目", Run: interpreter + " -m pip install -e ."})
+	case exists(dir, "pyproject.toml"):
+		commands = append(commands, Command{
+			Name:        "安装项目",
+			Run:         pythonInstallRun(dir, "install -e ."),
+			Description: installDescription(dir),
+		})
 	}
 	if exists(dir, "main.py") {
-		commands = append(commands, Command{Name: "运行", Run: interpreter + " main.py"})
+		commands = append(commands, Command{Name: "运行", Run: python + " main.py"})
 	}
 	if exists(dir, "pytest.ini") || exists(dir, "conftest.py") || exists(dir, "tests") || exists(dir, "test") {
-		commands = append(commands, Command{Name: "运行测试", Run: interpreter + " -m pytest"})
+		commands = append(commands, Command{Name: "运行测试", Run: python + " -m pytest"})
 	}
 	if len(commands) > 0 {
 		p.Commands = setCommandSource(commands, "Python project files")
@@ -539,6 +553,51 @@ func resolvePython(p *Plugin, dir string) {
 			p.Env[i].Check = interpreter + " -m pip --version"
 		}
 	}
+}
+
+// venvPython returns the project-relative interpreter of an existing local
+// virtual environment (.venv preferred, then venv), or "" when there is
+// none. The path is relative so it stays free of spaces from the project's
+// absolute path.
+func venvPython(dir string) string {
+	for _, name := range []string{".venv", "venv"} {
+		if info, err := os.Stat(filepath.Join(dir, name)); err == nil && info.IsDir() {
+			if _, err := os.Stat(filepath.Join(dir, venvInterpreterPath(name))); err == nil {
+				return venvInterpreterPath(name)
+			}
+		}
+	}
+	return ""
+}
+
+// venvInterpreterPath joins a virtual environment directory name with the
+// platform-specific interpreter location inside it.
+func venvInterpreterPath(name string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(name, "Scripts", "python.exe")
+	}
+	return filepath.Join(name, "bin", "python")
+}
+
+// pythonInstallRun wraps pip arguments so packages land in the project's
+// virtual environment: an existing one is used directly, otherwise the
+// command first creates .venv — PEP 668 systems (Homebrew, Debian, Ubuntu)
+// reject system-wide pip installs.
+func pythonInstallRun(dir, pipArgs string) string {
+	interpreter := pythonInterpreter()
+	if venv := venvPython(dir); venv != "" {
+		return venv + " -m pip " + pipArgs
+	}
+	return interpreter + " -m venv .venv && " + venvInterpreterPath(".venv") + " -m pip " + pipArgs
+}
+
+// installDescription explains what the install command does in terms of the
+// project's virtual environment state.
+func installDescription(dir string) string {
+	if venvPython(dir) != "" {
+		return "使用项目 .venv 中的 pip 安装依赖"
+	}
+	return "先创建 .venv 虚拟环境，再在其中安装依赖"
 }
 
 // pythonInterpreter prefers "python" but falls back to "python3", which many

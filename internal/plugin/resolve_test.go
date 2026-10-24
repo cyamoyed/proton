@@ -223,7 +223,7 @@ func TestResolvePythonPrefersPythonOnPath(t *testing.T) {
 	resolved := ResolveForDir(pythonPlugin(), dir)
 
 	for _, want := range []string{
-		"python -m pip install -r requirements.txt",
+		"python -m venv .venv && .venv/bin/python -m pip install -r requirements.txt",
 		"python main.py",
 		"python -m pytest",
 	} {
@@ -254,7 +254,7 @@ func TestResolvePythonFallsBackToPython3(t *testing.T) {
 	resolved := ResolveForDir(pythonPlugin(), dir)
 
 	for _, want := range []string{
-		"python3 -m pip install -r requirements.txt",
+		"python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt",
 		"python3 main.py",
 		"python3 -m pytest",
 	} {
@@ -308,6 +308,75 @@ func TestResolvePythonAdaptsGenericCommands(t *testing.T) {
 			t.Errorf("commands %+v do not include %q", resolved.Commands, want)
 		}
 	}
+}
+
+func TestResolvePythonUsesExistingVenvInterpreter(t *testing.T) {
+	for _, venvName := range []string{".venv", "venv"} {
+		t.Run(venvName, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "requirements.txt"), nil, 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Join(dir, venvName, venvBinDir()), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, venvName, venvBinDir(), venvExeName()), nil, 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(filepath.Join(dir, "tests"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			pathWithInterpreters(t, "python3")
+
+			resolved := ResolveForDir(pythonPlugin(), dir)
+
+			wantVenv := filepath.Join(venvName, venvBinDir(), venvExeName())
+			for _, want := range []string{
+				wantVenv + " -m pip install -r requirements.txt",
+				wantVenv + " -m pytest",
+			} {
+				if !hasCommandRun(resolved.Commands, want) {
+					t.Errorf("commands %+v do not include %q", resolved.Commands, want)
+				}
+			}
+			if hasCommandRun(resolved.Commands, "python3 main.py") {
+				t.Errorf("run command should not use the base interpreter when a venv exists: %+v", resolved.Commands)
+			}
+		})
+	}
+}
+
+func TestResolvePythonIgnoresEmptyVenvDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "main.py"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, ".venv"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	pathWithInterpreters(t, "python")
+
+	resolved := ResolveForDir(pythonPlugin(), dir)
+
+	if !hasCommandRun(resolved.Commands, "python main.py") {
+		t.Fatalf("commands = %+v, want base interpreter for a venv without python", resolved.Commands)
+	}
+}
+
+// venvBinDir and venvExeName mirror the platform layout of a virtualenv for
+// test fixtures: bin/python on Unix, Scripts\python.exe on Windows.
+func venvBinDir() string {
+	if runtime.GOOS == "windows" {
+		return "Scripts"
+	}
+	return "bin"
+}
+
+func venvExeName() string {
+	if runtime.GOOS == "windows" {
+		return "python.exe"
+	}
+	return "python"
 }
 
 // pathWithInterpreters points PATH at a temp directory containing an
