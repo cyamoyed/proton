@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -505,23 +506,66 @@ func resolveNode(p *Plugin, dir string) {
 }
 
 func resolvePython(p *Plugin, dir string) {
+	interpreter := pythonInterpreter()
 	commands := make([]Command, 0, len(p.Commands))
 	if exists(dir, "requirements.txt") {
-		commands = append(commands, Command{Name: "安装依赖", Run: "python -m pip install -r requirements.txt"})
+		commands = append(commands, Command{Name: "安装依赖", Run: interpreter + " -m pip install -r requirements.txt"})
 	} else if exists(dir, "Pipfile") {
 		commands = append(commands, Command{Name: "安装依赖", Run: "pipenv install"})
 	} else if exists(dir, "pyproject.toml") {
-		commands = append(commands, Command{Name: "安装项目", Run: "python -m pip install -e ."})
+		commands = append(commands, Command{Name: "安装项目", Run: interpreter + " -m pip install -e ."})
 	}
 	if exists(dir, "main.py") {
-		commands = append(commands, Command{Name: "运行", Run: "python main.py"})
+		commands = append(commands, Command{Name: "运行", Run: interpreter + " main.py"})
 	}
 	if exists(dir, "pytest.ini") || exists(dir, "conftest.py") || exists(dir, "tests") || exists(dir, "test") {
-		commands = append(commands, Command{Name: "运行测试", Run: "python -m pytest"})
+		commands = append(commands, Command{Name: "运行测试", Run: interpreter + " -m pytest"})
 	}
 	if len(commands) > 0 {
 		p.Commands = setCommandSource(commands, "Python project files")
+	} else {
+		for i := range p.Commands {
+			p.Commands[i].Run = adaptPythonCommand(p.Commands[i].Run, interpreter)
+		}
 	}
+	for i := range p.Env {
+		switch p.Env[i].Name {
+		case "python":
+			if interpreter != "python" {
+				p.Env[i].Name = interpreter
+				p.Env[i].Check = interpreter + " --version"
+			}
+		case "pip":
+			p.Env[i].Check = interpreter + " -m pip --version"
+		}
+	}
+}
+
+// pythonInterpreter prefers "python" but falls back to "python3", which many
+// systems (recent macOS, Debian/Ubuntu) ship as the only name on PATH. When
+// neither is visible the commands keep "python" so login-shell PATH can still
+// resolve it at execution time.
+func pythonInterpreter() string {
+	for _, candidate := range []string{"python", "python3"} {
+		if _, err := exec.LookPath(candidate); err == nil {
+			return candidate
+		}
+	}
+	return "python"
+}
+
+// adaptPythonCommand rewrites the generic plugin commands so every entry runs
+// through the detected interpreter, keeping pip and pytest bound to it.
+func adaptPythonCommand(run, interpreter string) string {
+	switch {
+	case run == "python" || strings.HasPrefix(run, "python "):
+		return interpreter + run[len("python"):]
+	case run == "pip" || strings.HasPrefix(run, "pip "):
+		return interpreter + " -m pip" + run[len("pip"):]
+	case run == "pytest" || strings.HasPrefix(run, "pytest "):
+		return interpreter + " -m pytest" + run[len("pytest"):]
+	}
+	return run
 }
 
 func resolveGradle(p *Plugin, dir string) {

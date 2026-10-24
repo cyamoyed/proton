@@ -208,6 +208,152 @@ func writeTestXcodeProject(t *testing.T, dir, name, pbxproj string) string {
 	return project
 }
 
+func TestResolvePythonPrefersPythonOnPath(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"requirements.txt", "main.py"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "tests"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	pathWithInterpreters(t, "python", "python3")
+
+	resolved := ResolveForDir(pythonPlugin(), dir)
+
+	for _, want := range []string{
+		"python -m pip install -r requirements.txt",
+		"python main.py",
+		"python -m pytest",
+	} {
+		if !hasCommandRun(resolved.Commands, want) {
+			t.Errorf("commands %+v do not include %q", resolved.Commands, want)
+		}
+	}
+	if env := envCheckByName(resolved.Env, "python"); env == nil || env.Check != "python --version" {
+		t.Fatalf("python env check = %+v", resolved.Env)
+	}
+	if env := envCheckByName(resolved.Env, "pip"); env == nil || env.Check != "python -m pip --version" {
+		t.Fatalf("pip env check = %+v", resolved.Env)
+	}
+}
+
+func TestResolvePythonFallsBackToPython3(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"requirements.txt", "main.py"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dir, "tests"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	pathWithInterpreters(t, "python3")
+
+	resolved := ResolveForDir(pythonPlugin(), dir)
+
+	for _, want := range []string{
+		"python3 -m pip install -r requirements.txt",
+		"python3 main.py",
+		"python3 -m pytest",
+	} {
+		if !hasCommandRun(resolved.Commands, want) {
+			t.Errorf("commands %+v do not include %q", resolved.Commands, want)
+		}
+	}
+	if env := envCheckByName(resolved.Env, "python3"); env == nil || env.Check != "python3 --version" {
+		t.Fatalf("python env check = %+v", resolved.Env)
+	}
+	if env := envCheckByName(resolved.Env, "pip"); env == nil || env.Check != "python3 -m pip --version" {
+		t.Fatalf("pip env check = %+v", resolved.Env)
+	}
+	if envCheckByName(resolved.Env, "python") != nil {
+		t.Fatalf("stale python env check remains: %+v", resolved.Env)
+	}
+}
+
+func TestResolvePythonDefaultsToPythonWithoutInterpreterOnPath(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "main.py"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	pathWithInterpreters(t)
+
+	resolved := ResolveForDir(pythonPlugin(), dir)
+
+	if !hasCommandRun(resolved.Commands, "python main.py") {
+		t.Fatalf("commands = %+v, want default python interpreter", resolved.Commands)
+	}
+	if env := envCheckByName(resolved.Env, "python"); env == nil || env.Check != "python --version" {
+		t.Fatalf("python env check = %+v", resolved.Env)
+	}
+}
+
+func TestResolvePythonAdaptsGenericCommands(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "setup.py"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	pathWithInterpreters(t, "python3")
+
+	resolved := ResolveForDir(pythonPlugin(), dir)
+
+	for _, want := range []string{
+		"python3 -m pip install -r requirements.txt",
+		"python3 main.py",
+		"python3 -m pytest",
+	} {
+		if !hasCommandRun(resolved.Commands, want) {
+			t.Errorf("commands %+v do not include %q", resolved.Commands, want)
+		}
+	}
+}
+
+// pathWithInterpreters points PATH at a temp directory containing an
+// executable marker file for each given interpreter name and returns the
+// directory. Nothing is executed; only LookPath visibility matters.
+func pathWithInterpreters(t *testing.T, names ...string) string {
+	t.Helper()
+	bin := t.TempDir()
+	for _, name := range names {
+		file := name
+		if runtime.GOOS == "windows" {
+			file += ".exe"
+		}
+		path := filepath.Join(bin, file)
+		if err := os.WriteFile(path, nil, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	return bin
+}
+
+func pythonPlugin() *Plugin {
+	return &Plugin{
+		Name: "python",
+		Commands: []Command{
+			{Name: "安装依赖", Run: "pip install -r requirements.txt"},
+			{Name: "运行", Run: "python main.py"},
+			{Name: "运行测试", Run: "pytest"},
+		},
+		Env: []EnvCheck{
+			{Name: "python", Check: "python --version", Required: true},
+			{Name: "pip", Check: "pip --version", Required: true},
+		},
+	}
+}
+
+func envCheckByName(checks []EnvCheck, name string) *EnvCheck {
+	for i := range checks {
+		if checks[i].Name == name {
+			return &checks[i]
+		}
+	}
+	return nil
+}
+
 func TestResolveMavenProjectTypes(t *testing.T) {
 	tests := []struct {
 		name     string
